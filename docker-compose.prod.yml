@@ -1,0 +1,178 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: nebulamind-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docs/database/DDL脚本.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./docs/database/seed_data.sql:/docker-entrypoint-initdb.d/02_seed.sql
+    environment:
+      POSTGRES_DB: erDiagram
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: <your-password>
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d erDiagram"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: nebulamind-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: nebulamind-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: nebulamind-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: nebulamind
+      MINIO_ROOT_PASSWORD: your-minio-password
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: nebulamind-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: '1000'
+      ETCD_QUOTA_BACKEND_BYTES: '4294967296'
+      ETCD_SNAPSHOT_COUNT: '50000'
+    volumes:
+      - etcd-data:/etcd
+    command: etcd --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    restart: unless-stopped
+
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: nebulamind-milvus
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY: nebulamind
+      MINIO_SECRET_KEY: your-minio-password
+      MINIO_BUCKET_NAME: milvus-bucket
+    depends_on:
+      - etcd
+      - minio
+    command: ["milvus", "run", "standalone"]
+    restart: unless-stopped
+
+  ai-service:
+    image: nebulamind-ai-service:latest
+    container_name: nebulamind-ai-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+      - milvus
+      - minio
+    environment:
+      - REDIS_HOST=redis
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=nebulamind
+      - MINIO_SECRET_KEY=your-minio-password
+      - MAAS_API_KEY=${MAAS_API_KEY}
+      - MAAS_BASE_URL=https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1
+      - LLM_PROVIDER=openai
+      - OPENAI_BASE_URL=https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_LLM_MODEL=yuanjing-70b-chat
+      - OPENAI_EMBEDDING_MODEL=qwen3-vl-embedding-8b
+    volumes:
+      - ai-service-logs:/app/logs
+    restart: unless-stopped
+
+  backend:
+    image: nebulamind-backend:latest
+    container_name: nebulamind-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - DB_URL=jdbc:postgresql://postgres:5432/erDiagram
+      - DB_USERNAME=root
+      - DB_PASSWORD=<your-password>
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=nebulamind
+      - MINIO_SECRET_KEY=your-minio-password
+      - MINIO_BUCKET_NAME=nebulamind-files
+      - NEBULAMIND_STORAGE_ENABLED=minio
+      - MAAS_API_KEY=${MAAS_API_KEY}
+      - AI_SERVICE_BASE_URL=http://ai-service:8081
+      - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    command: ["java", "-jar", "app.jar"]
+    volumes:
+      - backend-logs:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    image: nebulamind-frontend:latest
+    container_name: nebulamind-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+  minio-data:
+  etcd-data:
+  milvus-data:
+  ai-service-logs:
+  backend-logs:

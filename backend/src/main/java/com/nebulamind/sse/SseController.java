@@ -1,0 +1,107 @@
+package com.nebulamind.sse;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import jakarta.annotation.PreDestroy;
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Slf4j
+@RestController
+@RequestMapping("/sse")
+public class SseController {
+
+    private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+
+    @GetMapping(value = "/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter subscribe(@PathVariable String userId) {
+        log.info("SSE subscription request from user: {}", userId);
+
+        SseEmitter emitter = new SseEmitter(300000L);
+        emitters.put(userId, emitter);
+
+        emitter.onCompletion(() -> {
+            log.info("SSE connection completed for user: {}", userId);
+            emitters.remove(userId);
+        });
+
+        emitter.onTimeout(() -> {
+            log.info("SSE connection timeout for user: {}", userId);
+            emitters.remove(userId);
+        });
+
+        emitter.onError(e -> {
+            log.error("SSE connection error for user: {}", userId, e);
+            emitters.remove(userId);
+        });
+
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("connected")
+                    .data(Map.of("message", "SSE connection established", "userId", userId)));
+        } catch (IOException e) {
+            log.error("Failed to send initial SSE message", e);
+            emitter.completeWithError(e);
+        }
+
+        return emitter;
+    }
+
+    public void sendProgress(String userId, String fileId, int progress, String message) {
+        SseEmitter emitter = emitters.get(userId);
+        if (emitter != null) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("progress")
+                        .data(Map.of(
+                                "fileId", fileId,
+                                "progress", progress,
+                                "message", message,
+                                "timestamp", System.currentTimeMillis()
+                        )));
+            } catch (IOException e) {
+                log.error("Failed to send SSE progress update", e);
+                emitters.remove(userId);
+            }
+        }
+    }
+
+    public void sendTaskStatus(String userId, String taskId, String status, String message) {
+        SseEmitter emitter = emitters.get(userId);
+        if (emitter != null) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("task")
+                        .data(Map.of(
+                                "taskId", taskId,
+                                "status", status,
+                                "message", message,
+                                "timestamp", System.currentTimeMillis()
+                        )));
+            } catch (IOException e) {
+                log.error("Failed to send SSE task status", e);
+                emitters.remove(userId);
+            }
+        }
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        emitters.values().forEach(emitter -> {
+            try {
+                emitter.complete();
+            } catch (Exception e) {
+                log.warn("Error closing SSE emitter", e);
+            }
+        });
+        emitters.clear();
+        log.info("SSE controller cleaned up");
+    }
+}

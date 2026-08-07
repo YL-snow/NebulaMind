@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+package-lock.json
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.zip
+*.tar
+*.tar.gz
+
+# macOS system files
+__MACOSX/
+Icon?
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+
+# Logs
+logs/
+*.log
+docker_logs.txt
+docker_status.txt
+
+# Docker
+nebulamind-images.tar
+
+# Project test artifacts
+backend/data/
+backend/api-test/
+backend/perf/
+backend/docs/
+result.txt
+deploy_test.txt
+
+# Frontend build artifacts
+frontend/dist/
+deploy/frontend-build/
+
+# API reference docs (copies from external sources)
+API文档/

@@ -1,0 +1,54 @@
+# ============================================================================
+# NebulaMind - Dev Profile Configuration
+# 开发环境使用 PostgreSQL 数据库（与生产环境一致，确保数据持久化）
+# 启动: mvn spring-boot:run -Dspring.profiles.active=dev
+# ============================================================================
+
+spring:
+  main:
+    allow-circular-references: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/erDiagram}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:change-me}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+nebulamind:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-secret-key-must-be-at-least-32-bytes-long-for-hmac-sha256}
+      expire-hours: 24
+      refresh-expire-hours: 72
+    internal-api-key: ${INTERNAL_API_KEY:dev-internal-key-do-not-use-in-production}
+  storage:
+    enabled: local
+    minio:
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:nebulamind}
+      secret-key: ${MINIO_SECRET_KEY:your-minio-password}
+      bucket-name: ${MINIO_BUCKET_NAME:nebulamind-files}
+    local:
+      base-path: ${LOCAL_STORAGE_PATH:./data/files}
+
+logging:
+  level:
+    com.nebulamind: DEBUG
+    org.hibernate.SQL: DEBUG

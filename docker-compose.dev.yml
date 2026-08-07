@@ -1,0 +1,142 @@
+# 本地开发环境依赖服务
+# 使用方式：docker compose -f docker-compose.dev.yml up -d
+# 然后本地 IDE 直接运行后端和前端
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: nebulamind-postgres-dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./docs/database/DDL脚本.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./docs/database/seed_data.sql:/docker-entrypoint-initdb.d/02_seed.sql
+    environment:
+      POSTGRES_DB: erDiagram
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: <your-password>
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d erDiagram"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - nebulamind-dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: nebulamind-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - nebulamind-dev
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: nebulamind-rabbitmq-dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-dev-data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: unless-stopped
+    networks:
+      - nebulamind-dev
+
+  minio:
+    image: minio/minio:latest
+    container_name: nebulamind-minio-dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-dev-data:/data
+    environment:
+      MINIO_ROOT_USER: nebulamind
+      MINIO_ROOT_PASSWORD: your-minio-password
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - nebulamind-dev
+
+  # MinIO 初始化：创建 nebulamind-files 桶
+  minio-init:
+    image: minio/mc:latest
+    container_name: nebulamind-minio-init-dev
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      sleep 2 &&
+      mc alias set local http://minio:9000 nebulamind your-minio-password &&
+      mc mb local/nebulamind-files --ignore-existing &&
+      mc anonymous set download local/nebulamind-files &&
+      echo 'MinIO bucket created successfully'
+      "
+    networks:
+      - nebulamind-dev
+    restart: no
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: nebulamind-etcd-dev
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: '1000'
+      ETCD_QUOTA_BACKEND_BYTES: '4294967296'
+      ETCD_SNAPSHOT_COUNT: '50000'
+    volumes:
+      - etcd-dev-data:/etcd
+    command: etcd --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    restart: unless-stopped
+    networks:
+      - nebulamind-dev
+
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: nebulamind-milvus-dev
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus-dev-data:/var/lib/milvus
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY: nebulamind
+      MINIO_SECRET_KEY: your-minio-password
+      MINIO_BUCKET_NAME: milvus-bucket
+    depends_on:
+      - etcd
+      - minio
+    command: ["milvus", "run", "standalone"]
+    restart: unless-stopped
+    networks:
+      - nebulamind-dev
+
+volumes:
+  postgres-dev-data:
+  redis-dev-data:
+  rabbitmq-dev-data:
+  minio-dev-data:
+  etcd-dev-data:
+  milvus-dev-data:
+
+networks:
+  nebulamind-dev:
+    driver: bridge

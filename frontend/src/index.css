@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* ===== 设计系统 ===== */
+  /* 改颜色直接改下面 RGB 后面的 hex 值（如 #2B4C7E）即可 */
+  /* 注意：要同时改 RGB 三个数字 + 后面的 hex 注释保持一致 */
+
+  --color-bg-base: 247 247 245;       /* hex: #F7F7F5 米白 - 页面背景 */
+  --color-bg-card: 255 255 255;       /* hex: #FFFFFF 纯白 - 卡片背景 */
+  --color-bg-elevated: 26 26 26;      /* hex: #1A1A1A 深黑 - 暗色元素 */
+  --color-text-primary: 20 20 19;     /* hex: #141413 深黑 - 正文颜色 */
+  --color-text-secondary: 90 90 90;   /* hex: #5A5A5A 中灰 - 辅助文字 */
+  --color-text-inverse: 255 255 255;  /* hex: #FFFFFF 纯白 - 暗底白字 */
+  --color-border-light: 235 234 231;  /* hex: #EBEAE7 浅灰 - 边框/分割线 */
+  --color-accent-blue: 43 76 126;     /* hex: #2B4C7E 深蓝 - 主色调（按钮/侧栏） */
+  --color-accent-amber: 201 123 74;   /* hex: #C97B4A 琥珀 - 强调色（生成按钮） */
+
+  --radius-card: 12px;
+  --radius-button: 4px;
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background-color: rgb(var(--color-bg-base));
+  color: rgb(var(--color-text-primary));
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color */
+::selection {
+  background-color: rgb(var(--color-accent-blue) / 0.15);
+  color: rgb(var(--color-text-primary));
+}
+
+/* Scrollbar styling - editorial minimalism */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border-light));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(212 211 208); /* #D4D3D0 */
+}
+
+/* Focus ring for accessibility */
+*:focus-visible {
+  outline: 2px solid rgb(var(--color-accent-blue));
+  outline-offset: 2px;
+}
+
+/* Hover-only scrollbar - hidden by default, shows on hover */
+.scrollbar-hover {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-hover::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-hover::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.scrollbar-hover:hover {
+  scrollbar-color: rgb(212 211 208) transparent;
+}
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background: rgb(212 211 208);
+}
