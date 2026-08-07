@@ -31,6 +31,8 @@ export const FILE_TYPES = {
   default: { icon: 'File', label: '其他文件', color: '#6b7280' },
 }
 
+export const ARCHIVE_FILE_TYPES = ['zip', 'rar', '7z', 'gz', 'tar', 'archive']
+
 export const SENSITIVE_LEVELS = {
   high: { label: '高敏感', color: '#9e3131', bgColor: '#fee2e2' },
   medium: { label: '中敏感', color: '#eba834', bgColor: '#fef3c7' },

@@ -1,6 +1,7 @@
 package com.nebulamind.api.client.maas;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ public class MaasApiClient {
     public MaasApiClient(MaasApiProperties properties) {
         this.properties = properties;
         this.objectMapper = new ObjectMapper();
+        this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(properties.getTimeout(), TimeUnit.MILLISECONDS)
                 .readTimeout(properties.getTimeout(), TimeUnit.MILLISECONDS)
@@ -185,11 +187,11 @@ public class MaasApiClient {
     /**
      * 基于LLM的文档重排序。
      * 注意：MaaS平台未提供独立Rerank端点，因此使用Chat模型对每个文档进行相关性评分。
-     * 使用yuanjing-70b-chat模型，通过Prompt让模型评估查询与文档的相关性。
+     * 使用配置的 LLM 模型，通过Prompt让模型评估查询与文档的相关性。
      */
     public MaasRerankResponse rerank(String model, String query, List<String> documents) {
         MaasRerankResponse response = new MaasRerankResponse();
-        response.setModel(model != null ? model : "yuanjing-70b-chat");
+        response.setModel(model != null ? model : properties.getLlmModel());
         List<MaasRerankResponse.Result> results = new ArrayList<>();
 
         for (int i = 0; i < documents.size(); i++) {
@@ -203,7 +205,7 @@ public class MaasApiClient {
                 List<Message> messages = new ArrayList<>();
                 messages.add(new Message("user", prompt));
 
-                MaasChatResponse chatResponse = chat("yuanjing-70b-chat", messages, 0.0, 10);
+                MaasChatResponse chatResponse = chat(properties.getLlmModel(), messages, 0.0, 10);
                 double score = 0.0;
                 if (chatResponse != null && chatResponse.getChoices() != null
                         && !chatResponse.getChoices().isEmpty()
@@ -238,7 +240,7 @@ public class MaasApiClient {
         try {
             List<Message> messages = new ArrayList<>();
             messages.add(new Message("user", "test"));
-            ChatCompletionRequest request = new ChatCompletionRequest("yuanjing-70b-chat", messages, 0.7, 10);
+            ChatCompletionRequest request = new ChatCompletionRequest(properties.getLlmModel(), messages, 0.7, 10);
 
             String json = objectMapper.writeValueAsString(request);
             RequestBody body = RequestBody.create(json, MediaType.parse("application/json"));

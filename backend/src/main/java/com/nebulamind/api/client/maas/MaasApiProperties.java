@@ -17,7 +17,7 @@ public class MaasApiProperties {
     private int timeout = 60000;
 
     /** 文本生成模型 */
-    private String llmModel = "yuanjing-70b-chat";
+    private String llmModel = "deepseek-v3_2";
 
     /** 向量嵌入模型 */
     private String embeddingModel = "qwen3-vl-embedding-8b";
@@ -33,6 +33,6 @@ public class MaasApiProperties {
     private String visionModel = "YuanjingVL";
 
     /** 视觉模型回退列表（主模型不可用时依次尝试） */
-    private List<String> fallbackVisionModels = List.of("deepseek-v3");
+    private List<String> fallbackVisionModels = List.of("glm-ocr");
 
 }

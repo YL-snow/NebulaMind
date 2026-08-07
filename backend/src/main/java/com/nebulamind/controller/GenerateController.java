@@ -43,6 +43,11 @@ public class GenerateController {
     );
     private static final Set<String> IMAGE_EXTENSIONS = IMAGE_MIME_TYPES.keySet();
 
+    /** 压缩包扩展名：AI 无法直接读取，需提示先解压 */
+    private static final Set<String> ARCHIVE_EXTENSIONS = Set.of(
+            "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "tgz"
+    );
+
     public GenerateController(AiServiceClient aiServiceClient, MaasApiClient maasApiClient,
                                FileService fileService, UserRepository userRepository,
                                StorageService storageService) {
@@ -67,6 +72,10 @@ public class GenerateController {
 
             File file = fileService.getFileById(UUID.fromString(request.getFileId()), userId);
             AiGenerateResponse response;
+
+            if (isArchiveFile(file)) {
+                return ResponseEntity.ok(archiveUnsupportedResponse(request.getFileId(), "摘要"));
+            }
 
             if (isImageFile(file)) {
                 String base64 = readImageAsBase64(file.getPath());
@@ -134,6 +143,10 @@ public class GenerateController {
             }
 
             File file = fileService.getFileById(UUID.fromString(request.getFileId()), userId);
+
+            if (isArchiveFile(file)) {
+                return ResponseEntity.ok(archiveUnsupportedResponse(request.getFileId(), "内容提取"));
+            }
 
             if (isImageFile(file)) {
                 String base64 = readImageAsBase64(file.getPath());
@@ -343,6 +356,18 @@ public class GenerateController {
 
     private boolean isImageFile(File file) {
         return file.getFileType() != null && IMAGE_EXTENSIONS.contains(file.getFileType().toLowerCase());
+    }
+
+    private boolean isArchiveFile(File file) {
+        return file.getFileType() != null && ARCHIVE_EXTENSIONS.contains(file.getFileType().toLowerCase());
+    }
+
+    private AiGenerateResponse archiveUnsupportedResponse(String fileId, String action) {
+        return AiGenerateResponse.builder()
+                .fileId(fileId)
+                .content("压缩包不支持直接" + action + "，请先解压后上传文件再试。")
+                .format("text")
+                .build();
     }
 
     private boolean isRateLimited(String content) {

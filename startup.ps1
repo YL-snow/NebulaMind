@@ -10,6 +10,18 @@ $ErrorActionPreference = "Continue"
 $rootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $rootDir
 
+# 加载根目录 .env（含 MAAS_API_KEY 等密钥，不提交到仓库）
+$envFile = Join-Path $rootDir ".env"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $key, $value = $line.Split("=", 2)
+            Set-Item -Path "Env:$key" -Value $value
+        }
+    }
+}
+
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "      NebulaMind — 启动中..."                -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan

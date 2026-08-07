@@ -58,8 +58,8 @@ nebulamind:
       base-url: ${MAAS_BASE_URL:https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1}
       api-key: ${MAAS_API_KEY:}
       timeout: 60000
-      # 文本生成模型（默认使用 yuanjing-70b-chat）
-      llm-model: ${MAAS_LLM_MODEL:yuanjing-70b-chat}
+      # 文本生成模型（默认使用 deepseek-v3_2）
+      llm-model: ${MAAS_LLM_MODEL:deepseek-v3_2}
       # 向量嵌入模型
       embedding-model: ${MAAS_EMBEDDING_MODEL:qwen3-vl-embedding-8b}
       # 多模态视觉模型的专用端点（元景-图文问答-80B YuanjingVL）
@@ -68,7 +68,7 @@ nebulamind:
       vision-model: ${MAAS_VISION_MODEL:YuanjingVL}
       # 视觉模型回退列表（主模型不可用时依次尝试）
       fallback-vision-models:
-        - deepseek-v3
+        - glm-ocr
 
     ai-service:
       base-url: ${AI_SERVICE_BASE_URL:http://localhost:8081}

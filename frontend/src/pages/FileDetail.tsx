@@ -13,6 +13,7 @@ import { securityApi } from '@/api/security'
 import { generateApi } from '@/api/generate'
 import { formatFileSize, formatDate, formatDateTime } from '@/utils/format'
 import { FILE_TYPES, SENSITIVE_LEVELS, AI_STATUS } from '@/utils/constants'
+import { ARCHIVE_FILE_TYPES } from '@/utils/constants'
 import type { FileItem, QAResponse, VersionItem, SensitiveItem } from '@/api/types'
 
 export const FileDetail = () => {
@@ -192,6 +193,10 @@ export const FileDetail = () => {
 
   const handleGenerateSummary = async () => {
     if (!file) return
+    if (ARCHIVE_FILE_TYPES.includes(file.fileType?.toLowerCase())) {
+      error('压缩包不支持直接生成摘要，请先解压后上传文件再试')
+      return
+    }
     setSummaryLoading(true)
     try {
       const response = await generateApi.summary({ fileId: file.id })

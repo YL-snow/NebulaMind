@@ -64,6 +64,11 @@ nebulamind:
       base-url: ${MAAS_BASE_URL:https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1}
       api-key: ${MAAS_API_KEY:}
       timeout: 60000
+      llm-model: ${MAAS_LLM_MODEL:deepseek-v3_2}
+      vision-base-url: ${MAAS_VISION_BASE_URL:https://maas-gz-api.ai-yuanjing.com/openapi/v1/yuanjingvl_plus}
+      vision-model: ${MAAS_VISION_MODEL:YuanjingVL}
+      fallback-vision-models:
+        - glm-ocr
 
     ai-service:
       base-url: ${AI_SERVICE_BASE_URL:http://localhost:8081}
