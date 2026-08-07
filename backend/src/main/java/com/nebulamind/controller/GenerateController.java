@@ -379,7 +379,7 @@ public class GenerateController {
     private AiGenerateResponse rateLimitResponse(String fileId) {
         return AiGenerateResponse.builder()
                 .fileId(fileId)
-                .content("API调用次数已达上限（10次/分钟），请等待1分钟后再试。如需调整限制，请联系管理员。")
+                .content("API调用次数已达上限（5次/分钟），请等待1分钟后再试。如需调整限制，请联系管理员。")
                 .format("text")
                 .build();
     }
@@ -441,7 +441,7 @@ public class GenerateController {
             String summaryPrompt = "根据以下多张图片的描述内容，生成一份关于「" + topic + "」的综合分析报告，要求格式规范、内容完整。\n\n"
                     + combined.toString();
             List<MaasApiClient.Message> msgs = List.of(new MaasApiClient.Message("user", summaryPrompt));
-            MaasChatResponse finalResp = maasApiClient.chat("yuanjing-70b-chat", msgs, 0.7, 2000);
+            MaasChatResponse finalResp = maasApiClient.chat("deepseek-v3_2", msgs, 0.7, 2000);
 
             String fileId = imageFiles.stream().map(f -> f.getId().toString()).collect(Collectors.joining(","));
             if (finalResp == null) {
@@ -478,7 +478,7 @@ public class GenerateController {
             String pptPrompt = "根据以下对图片内容的描述，生成一份关于「" + topic + "」的 PPT 演示文稿内容大纲，"
                     + "包含标题、每页要点，使用 markdown 格式输出。\n\n" + combined.toString();
             List<MaasApiClient.Message> msgs = List.of(new MaasApiClient.Message("user", pptPrompt));
-            MaasChatResponse finalResp = maasApiClient.chat("yuanjing-70b-chat", msgs, 0.7, 2000);
+            MaasChatResponse finalResp = maasApiClient.chat("deepseek-v3_2", msgs, 0.7, 2000);
 
             String fileId = imageFiles.stream().map(f -> f.getId().toString()).collect(Collectors.joining(","));
             if (finalResp == null) {

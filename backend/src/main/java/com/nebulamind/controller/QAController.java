@@ -62,7 +62,7 @@ public class QAController {
             if (response.getAnswer() != null && isRateLimited(response.getAnswer())) {
                 return ResponseEntity.ok(AiQAResponse.builder()
                         .question(request.getQuestion())
-                        .answer("API调用次数已达上限（10次/分钟），请等待1分钟后再试。")
+                        .answer("API调用次数已达上限（5次/分钟），请等待1分钟后再试。")
                         .sourceFileId(request.getFileId())
                         .confidence(0.0)
                         .build());
@@ -72,7 +72,7 @@ public class QAController {
         } catch (Exception e) {
             log.warn("AI QA service unavailable, returning fallback: {}", e.getMessage());
             String fallbackMsg = (e.getMessage() != null && isRateLimited(e.getMessage()))
-                    ? "API调用次数已达上限（10次/分钟），请等待1分钟后再试。"
+                    ? "API调用次数已达上限（5次/分钟），请等待1分钟后再试。"
                     : "AI 问答服务暂时不可用，请稍后重试。如果问题持续，请联系管理员。";
             AiQAResponse fallback = AiQAResponse.builder()
                     .question(request != null ? request.getQuestion() : "")
@@ -125,7 +125,7 @@ public class QAController {
             if (response.getAnswer() != null && isRateLimited(response.getAnswer())) {
                 return ResponseEntity.ok(AiQAResponse.builder()
                         .question(request.getQuestion())
-                        .answer("API调用次数已达上限（10次/分钟），请等待1分钟后再试。")
+                        .answer("API调用次数已达上限（5次/分钟），请等待1分钟后再试。")
                         .sourceFileId("")
                         .confidence(0.0)
                         .build());
@@ -135,7 +135,7 @@ public class QAController {
         } catch (Exception e) {
             log.warn("AI cross QA service unavailable, returning fallback: {}", e.getMessage());
             String fallbackMsg = (e.getMessage() != null && isRateLimited(e.getMessage()))
-                    ? "API调用次数已达上限（10次/分钟），请等待1分钟后再试。"
+                    ? "API调用次数已达上限（5次/分钟），请等待1分钟后再试。"
                     : "AI 问答服务暂时不可用，请稍后重试。如果问题持续，请联系管理员。";
             AiQAResponse fallback = AiQAResponse.builder()
                     .question(request != null ? request.getQuestion() : "")

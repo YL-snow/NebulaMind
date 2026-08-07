@@ -115,7 +115,8 @@ services:
       - LLM_PROVIDER=openai
       - OPENAI_BASE_URL=https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_LLM_MODEL=yuanjing-70b-chat
+      - OPENAI_LLM_MODEL=deepseek-v3_2
+      - MaaS_RATE_LIMIT_MAX=5
       - OPENAI_EMBEDDING_MODEL=qwen3-vl-embedding-8b
     volumes:
       - ai-service-logs:/app/logs

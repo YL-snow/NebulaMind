@@ -82,7 +82,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             self.llm_model = settings.openai_llm_model; self.embedding_model = settings.openai_embedding_model
             self._available = True
             # 速率限制：5次/分钟（MaaS API 限流策略）
-            self._rate_limit_max = int(os.getenv("MaaS_RATE_LIMIT_MAX", "10"))
+            self._rate_limit_max = int(os.getenv("MaaS_RATE_LIMIT_MAX", "5"))
             self._rate_limit_window = int(os.getenv("MaaS_RATE_LIMIT_WINDOW", "60"))  # seconds
             # 分别为 chat 和 embedding 维护独立的速率限制
             self._chat_timestamps = deque()
