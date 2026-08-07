@@ -23,8 +23,8 @@ export const Login = () => {
     if (!isLogin) {
       const trimmedUsername = username.trim()
       const trimmedDisplayName = displayName.trim()
-      if (trimmedUsername.length < 3 || trimmedUsername.length > 100) {
-        error('用户名需为 3-100 个字符')
+      if (trimmedUsername.length < 2 || trimmedUsername.length > 100) {
+        error('用户名需为 2-100 个字符')
         return
       }
       if (!trimmedDisplayName) {
@@ -102,9 +102,9 @@ export const Login = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="请输入用户名（3-100 个字符）"
+                  placeholder="请输入用户名（2-100 个字符）"
                   required
-                  minLength={3}
+                  minLength={2}
                   maxLength={100}
                 />
                 <Input
