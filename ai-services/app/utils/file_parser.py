@@ -4,9 +4,26 @@ logger = logging.getLogger(__name__)
 
 class FileParser:
 
+    # 二进制文件无法提取有效文本时的固定标记，后端据此触发视觉模型兜底
+    NO_EXTRACTABLE_TEXT = "[NO_EXTRACTABLE_TEXT]"
+
     # 需要解析的二进制文件扩展名
     BINARY_EXTENSIONS = {"pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt",
                         "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp"}
+
+    @staticmethod
+    def _ext_of(file_path, file_type):
+        if file_type: return file_type.lower()
+        if file_path and "." in file_path: return file_path.rsplit(".", 1)[-1].lower()
+        return ""
+
+    @staticmethod
+    def _is_binary(ext):
+        return (ext or "").lower() in FileParser.BINARY_EXTENSIONS
+
+    @staticmethod
+    def _binary_no_text_message():
+        return FileParser.NO_EXTRACTABLE_TEXT + " 该文件未提取到可分析的文本，可能为图片型文档或空白文件。"
 
     @staticmethod
     def ensure_text(content, file_path=None, file_type=None, file_content_base64=None):
@@ -28,23 +45,30 @@ class FileParser:
                 if parsed and len(parsed.strip()) > 20:
                     logger.info(f"FileParser extracted {len(parsed)} chars from base64 content")
                     return parsed
-                logger.warning("FileParser returned empty/short content from base64, using raw content")
+                logger.warning("FileParser returned empty/short content from base64")
+                if FileParser._is_binary(FileParser._ext_of(file_path, file_type)):
+                    return FileParser._binary_no_text_message()
+                return parsed or content
             except Exception as e:
-                logger.warning(f"FileParser failed for base64 content: {e}, using raw content")
+                logger.warning(f"FileParser failed for base64 content: {e}")
+                if FileParser._is_binary(FileParser._ext_of(file_path, file_type)):
+                    return FileParser._binary_no_text_message()
+                return content
 
         # 其次尝试从文件路径解析
         if file_path:
-            ext = (file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
-                   ) if not file_type else file_type.lower()
+            ext = FileParser._ext_of(file_path, file_type)
             if ext in FileParser.BINARY_EXTENSIONS:
                 try:
                     parsed = FileParser.parse(file_path)
                     if parsed and len(parsed.strip()) > 20:
                         logger.info(f"FileParser extracted {len(parsed)} chars from {file_path}")
                         return parsed
-                    logger.warning(f"FileParser returned empty/short content for {file_path}, using raw content")
+                    logger.warning(f"FileParser returned empty/short content for {file_path}")
+                    return FileParser._binary_no_text_message()
                 except Exception as e:
-                    logger.warning(f"FileParser failed for {file_path}: {e}, using raw content")
+                    logger.warning(f"FileParser failed for {file_path}: {e}")
+                    return FileParser._binary_no_text_message()
         return content
 
     @staticmethod

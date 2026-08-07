@@ -31,6 +31,9 @@ class FileUnderstandingService:
     @staticmethod
     def generate_summary(file_id, content, max_length=300, file_path=None, file_content_base64=None, file_type=None):
         content = FileParser.ensure_text(content, file_path, file_type, file_content_base64)
+        if FileParser.NO_EXTRACTABLE_TEXT in content:
+            logger.info(f"No extractable text for {file_id}, skipping LLM call")
+            return {"file_id": file_id, "content": content, "key_points": [], "format": "text"}
         try:
             if len(content) > 6000:
                 return FileUnderstandingService._generate_long_summary(file_id, content, max_length)

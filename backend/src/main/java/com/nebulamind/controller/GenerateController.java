@@ -16,12 +16,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Slf4j
 @RestController
@@ -97,6 +102,19 @@ public class GenerateController {
                     response = aiServiceClient.generateSummary(request.getFileId(), content, file.getPath(), base64, file.getFileType());
                     if (isRateLimited(response.getContent())) {
                         return ResponseEntity.ok(rateLimitResponse(request.getFileId()));
+                    }
+                    if (response.getContent() != null
+                            && response.getContent().contains("NO_EXTRACTABLE_TEXT")
+                            && isPptx(file)) {
+                        String visionSummary = generateImageSlideSummary(file);
+                        if (visionSummary != null) {
+                            response = AiGenerateResponse.builder()
+                                    .fileId(request.getFileId())
+                                    .content(visionSummary)
+                                    .keyPoints(null)
+                                    .format("markdown")
+                                    .build();
+                        }
                     }
                 } catch (Exception e) {
                     log.warn("AI summary service unavailable, using fallback: {}", e.getMessage());
@@ -360,6 +378,85 @@ public class GenerateController {
 
     private boolean isArchiveFile(File file) {
         return file.getFileType() != null && ARCHIVE_EXTENSIONS.contains(file.getFileType().toLowerCase());
+    }
+
+    private boolean isPptx(File file) {
+        return file.getFileType() != null && Set.of("pptx", "ppt").contains(file.getFileType().toLowerCase());
+    }
+
+    /**
+     * 图片型 PPT/PPTX：提取内嵌图片并调用视觉模型生成摘要。
+     * @return 摘要内容；无法提取图片或视觉模型失败时返回 null
+     */
+    private String generateImageSlideSummary(File file) {
+        try {
+            byte[] bytes = downloadFileBytes(file.getPath());
+            List<MediaImage> images = extractPptxMedia(bytes);
+            if (images.isEmpty()) {
+                log.warn("No embedded media found in PPTX: {}", file.getPath());
+                return null;
+            }
+            MediaImage first = images.get(0);
+            String base64 = Base64.getEncoder().encodeToString(first.bytes);
+            String mimeType = first.mimeType != null ? first.mimeType : "image/jpeg";
+            String prompt = "这是一张来自PPT演示文稿的幻灯片图片，请详细描述图片中的文字和视觉内容，并生成简洁摘要。";
+            MaasApiClient.VisionResult result = maasApiClient.chatVision(prompt, base64, mimeType, 0.7, 1200);
+            if (result.isSuccess() && result.getResponse() != null
+                    && result.getResponse().getChoices() != null
+                    && !result.getResponse().getChoices().isEmpty()) {
+                return result.getResponse().getChoices().get(0).getMessage().getContent();
+            }
+            log.warn("Vision summary failed: {}", result.getErrorMessage());
+        } catch (Exception e) {
+            log.error("Failed to generate image slide summary for {}", file.getPath(), e);
+        }
+        return null;
+    }
+
+    private byte[] downloadFileBytes(String path) throws Exception {
+        try (InputStream inputStream = storageService.downloadFile(path)) {
+            return inputStream.readAllBytes();
+        }
+    }
+
+    private List<MediaImage> extractPptxMedia(byte[] bytes) {
+        List<MediaImage> images = new ArrayList<>();
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8)) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName().toLowerCase();
+                if (entry.isDirectory() || !name.startsWith("ppt/media/") || images.size() >= 3) {
+                    continue;
+                }
+                byte[] media = zis.readAllBytes();
+                String mimeType = guessImageMimeType(entry.getName());
+                if (mimeType != null) {
+                    images.add(new MediaImage(media, mimeType));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read PPTX media: {}", e.getMessage());
+        }
+        return images;
+    }
+
+    private String guessImageMimeType(String name) {
+        String lower = name.toLowerCase();
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".bmp")) return "image/bmp";
+        if (lower.endsWith(".webp")) return "image/webp";
+        return null;
+    }
+
+    private static class MediaImage {
+        final byte[] bytes;
+        final String mimeType;
+        MediaImage(byte[] bytes, String mimeType) {
+            this.bytes = bytes;
+            this.mimeType = mimeType;
+        }
     }
 
     private AiGenerateResponse archiveUnsupportedResponse(String fileId, String action) {

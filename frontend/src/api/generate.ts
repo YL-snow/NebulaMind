@@ -9,7 +9,7 @@ import type {
 } from './types'
 
 export const generateApi = {
-  summary: (data: GenerateSummaryRequest) => request.post<GenerateSummaryResponse>('/generate/summary', data),
+  summary: (data: GenerateSummaryRequest) => request.post<GenerateSummaryResponse>('/generate/summary', data, { timeout: 120000 }),
 
   extract: (data: GenerateExtractRequest) => request.post<GenerateExtractResponse>('/generate/extract', data),
 
