@@ -111,20 +111,20 @@ if (Test-Path $frontendPath) {
     if ($frontendRunning) {
         Write-Host "  → 前端已在运行 (端口 5173)" -ForegroundColor Green
     } else {
-        # 检查是用 pnpm 还是 npm
-        $pkgManager = "pnpm"
-        if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-            $pkgManager = "npm"
+        # 与 README 保持一致，前端统一使用 npm
+        $npmCmd = "npm.cmd"
+        if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
+            $npmCmd = "npm"
         }
         Start-Process powershell -WindowStyle Normal -ArgumentList @"
             Set-Location '$frontendPath';
             Write-Host '=== NebulaMind 前端服务 (端口 5173) ===' -ForegroundColor Cyan;
             if (-not (Test-Path 'node_modules')) {
                 Write-Host '正在安装前端依赖...' -ForegroundColor Yellow;
-                & $pkgManager install;
+                & $npmCmd install;
             }
             Write-Host '启动开发服务器...' -ForegroundColor Green;
-            & $pkgManager run dev;
+            & $npmCmd run dev;
             Read-Host '`n按 Enter 关闭';
 "@
         Write-Host "  ✓ 前端服务新窗口已打开" -ForegroundColor Green
