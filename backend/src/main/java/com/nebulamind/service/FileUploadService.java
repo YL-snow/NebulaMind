@@ -8,6 +8,7 @@ import com.nebulamind.entity.User;
 import com.nebulamind.exception.ResourceNotFoundException;
 import com.nebulamind.repository.FileRepository;
 import com.nebulamind.repository.UserRepository;
+import com.nebulamind.util.FileTypeDetector;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import jakarta.annotation.PostConstruct;
@@ -162,7 +163,7 @@ public class FileUploadService {
                 .path(objectName)
                 .size(session.getFileSize())
                 .mimeType(session.getContentType())
-                .fileType(determineFileType(session.getContentType()))
+                .fileType(determineFileType(session.getContentType(), session.getFileName()))
                 .hash(session.getFileHash())
                 .user(user)
                 .status(File.FileStatus.COMPLETED)
@@ -211,25 +212,8 @@ public class FileUploadService {
         return String.format("%s/%s_%s", userId, UUID.randomUUID(), fileName);
     }
 
-    private String determineFileType(String mimeType) {
-        if (mimeType == null) {
-            return "unknown";
-        }
-        String type = mimeType.split("/")[0];
-        return switch (type.toLowerCase()) {
-            case "application" -> {
-                if (mimeType.contains("pdf")) yield "pdf";
-                if (mimeType.contains("word")) yield "word";
-                if (mimeType.contains("excel") || mimeType.contains("spreadsheet")) yield "excel";
-                if (mimeType.contains("powerpoint") || mimeType.contains("presentation")) yield "ppt";
-                yield "document";
-            }
-            case "image" -> "image";
-            case "video" -> "video";
-            case "audio" -> "audio";
-            case "text" -> "text";
-            default -> "other";
-        };
+    private String determineFileType(String mimeType, String fileName) {
+        return FileTypeDetector.detect(mimeType, fileName);
     }
 
     private void cleanupTemp(String uploadId) {

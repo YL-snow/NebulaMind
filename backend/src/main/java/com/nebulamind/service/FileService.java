@@ -9,6 +9,7 @@ import com.nebulamind.exception.ResourceNotFoundException;
 import com.nebulamind.repository.FileContentRepository;
 import com.nebulamind.repository.FileRepository;
 import com.nebulamind.repository.UserRepository;
+import com.nebulamind.util.FileTypeDetector;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -88,7 +89,7 @@ public class FileService {
                 .path(objectName)
                 .size(request.getSize())
                 .mimeType(request.getMimeType())
-                .fileType(determineFileType(request.getMimeType()))
+                .fileType(determineFileType(request.getMimeType(), request.getName()))
                 .hash(hash)
                 .user(user)
                 .status(File.FileStatus.COMPLETED)
@@ -272,24 +273,7 @@ public class FileService {
         }
     }
 
-    private String determineFileType(String mimeType) {
-        if (mimeType == null) {
-            return "unknown";
-        }
-        String type = mimeType.split("/")[0];
-        return switch (type.toLowerCase()) {
-            case "application" -> {
-                if (mimeType.contains("pdf")) yield "pdf";
-                if (mimeType.contains("word")) yield "word";
-                if (mimeType.contains("excel") || mimeType.contains("spreadsheet")) yield "excel";
-                if (mimeType.contains("powerpoint") || mimeType.contains("presentation")) yield "ppt";
-                yield "document";
-            }
-            case "image" -> "image";
-            case "video" -> "video";
-            case "audio" -> "audio";
-            case "text" -> "text";
-            default -> "other";
-        };
+    private String determineFileType(String mimeType, String fileName) {
+        return FileTypeDetector.detect(mimeType, fileName);
     }
 }

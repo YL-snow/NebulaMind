@@ -6,6 +6,7 @@ import com.nebulamind.entity.User;
 import com.nebulamind.repository.FileRepository;
 import com.nebulamind.repository.UserRepository;
 import com.nebulamind.service.MinIOService;
+import com.nebulamind.util.FileTypeDetector;
 import com.nebulamind.service.RabbitMQMessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -115,7 +116,7 @@ public class CloudDriveSyncService {
                 .cloudDriveFileId(cloudFile.getId())
                 .size(cloudFile.getSize())
                 .mimeType(cloudFile.getMimeType())
-                .fileType(determineFileType(cloudFile.getMimeType()))
+                .fileType(determineFileType(cloudFile.getMimeType(), cloudFile.getName()))
                 .hash(hash)
                 .user(user)
                 .status(File.FileStatus.COMPLETED)
@@ -152,7 +153,7 @@ public class CloudDriveSyncService {
         existingFile.setPath(newPath);
         existingFile.setSize(cloudFile.getSize());
         existingFile.setMimeType(cloudFile.getMimeType());
-        existingFile.setFileType(determineFileType(cloudFile.getMimeType()));
+        existingFile.setFileType(determineFileType(cloudFile.getMimeType(), cloudFile.getName()));
         existingFile.setHash(hash);
         existingFile.setVersion(existingFile.getVersion() + 1);
 
@@ -220,24 +221,7 @@ public class CloudDriveSyncService {
         return String.format("%s/%s_%s", userId, UUID.randomUUID(), fileName);
     }
 
-    private String determineFileType(String mimeType) {
-        if (mimeType == null) {
-            return "unknown";
-        }
-        String type = mimeType.split("/")[0];
-        return switch (type.toLowerCase()) {
-            case "application" -> {
-                if (mimeType.contains("pdf")) yield "pdf";
-                if (mimeType.contains("word")) yield "word";
-                if (mimeType.contains("excel") || mimeType.contains("spreadsheet")) yield "excel";
-                if (mimeType.contains("powerpoint") || mimeType.contains("presentation")) yield "ppt";
-                yield "document";
-            }
-            case "image" -> "image";
-            case "video" -> "video";
-            case "audio" -> "audio";
-            case "text" -> "text";
-            default -> "other";
-        };
+    private String determineFileType(String mimeType, String fileName) {
+        return FileTypeDetector.detect(mimeType, fileName);
     }
 }

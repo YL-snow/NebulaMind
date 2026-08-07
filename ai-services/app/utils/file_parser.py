@@ -5,7 +5,8 @@ logger = logging.getLogger(__name__)
 class FileParser:
 
     # 需要解析的二进制文件扩展名
-    BINARY_EXTENSIONS = {"pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt"}
+    BINARY_EXTENSIONS = {"pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt",
+                        "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp"}
 
     @staticmethod
     def ensure_text(content, file_path=None, file_type=None, file_content_base64=None):

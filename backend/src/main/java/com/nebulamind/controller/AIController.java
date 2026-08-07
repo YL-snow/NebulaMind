@@ -6,6 +6,7 @@ import com.nebulamind.entity.File;
 import com.nebulamind.repository.UserRepository;
 import com.nebulamind.service.FileService;
 import com.nebulamind.service.LocalStorageService;
+import com.nebulamind.util.FileTypeDetector;
 import com.nebulamind.service.MinIOService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +48,7 @@ public class AIController {
         try {
             File file = fileService.getFileById(id, userId);
             
-            String fileType = file.getFileType() != null ? file.getFileType().toLowerCase() : "";
+            String fileType = FileTypeDetector.normalize(file.getFileType());
             
             // 根据文件类型设置默认分类和标签
             String category = "文档";
@@ -58,7 +59,7 @@ public class AIController {
                 case "txt": category = "文本文档"; tags = List.of("文本"); break;
                 case "md": category = "Markdown文档"; tags = List.of("Markdown", "文本"); break;
                 case "xlsx": case "xls": case "csv": category = "数据表格"; tags = List.of("数据", "表格"); break;
-                case "jpg": case "jpeg": case "png": case "gif": case "bmp": case "webp": category = "图片"; tags = List.of("图片"); break;
+                case "jpg": case "jpeg": case "png": case "gif": case "bmp": case "webp": case "tiff": case "image": category = "图片"; tags = List.of("图片"); break;
                 case "ppt": case "pptx": category = "演示文稿"; tags = List.of("演示"); break;
                 case "zip": case "rar": case "7z": category = "压缩文件"; tags = List.of("压缩"); break;
                 default: category = "文档"; tags = List.of("文档"); break;
