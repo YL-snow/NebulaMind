@@ -9,6 +9,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.nebulamind.util.FileTypeDetector;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -55,6 +56,11 @@ public class File implements Serializable {
     @Transient
     public String getType() {
         return fileType;
+    }
+
+    @PostLoad
+    private void normalizeStoredFileType() {
+        this.fileType = FileTypeDetector.detectStored(this.fileType, this.mimeType, this.name);
     }
 
     @Column(nullable = false, length = 64)

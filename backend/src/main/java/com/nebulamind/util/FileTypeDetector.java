@@ -43,6 +43,14 @@ public final class FileTypeDetector {
         return fromName != null ? fromName : "unknown";
     }
 
+    public static String detectStored(String storedType, String mimeType, String fileName) {
+        String detected = detect(mimeType, fileName);
+        if (detected != null && !"unknown".equals(detected)) {
+            return detected;
+        }
+        return normalize(storedType);
+    }
+
     public static String normalize(String fileType) {
         if (fileType == null || fileType.isBlank()) {
             return "unknown";
