@@ -19,11 +19,29 @@ export const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!isLogin) {
+      const trimmedUsername = username.trim()
+      const trimmedDisplayName = displayName.trim()
+      if (trimmedUsername.length < 3 || trimmedUsername.length > 100) {
+        error('用户名需为 3-100 个字符')
+        return
+      }
+      if (!trimmedDisplayName) {
+        error('请输入显示名称')
+        return
+      }
+    }
+    if (password.length < 6) {
+      error('密码至少需要 6 位')
+      return
+    }
+
     setLoading(true)
 
     try {
       if (isLogin) {
-        const response = await authApi.login({ email, password })
+        const response = await authApi.login({ email: email.trim(), password })
         login(
           {
             id: response.userId,
@@ -36,7 +54,12 @@ export const Login = () => {
         )
         success('登录成功')
       } else {
-        await authApi.register({ username, email, password, displayName })
+        await authApi.register({
+          username: username.trim(),
+          email: email.trim(),
+          password,
+          displayName: displayName.trim(),
+        })
         success('注册成功，请登录')
         setIsLogin(true)
         setEmail('')
@@ -79,8 +102,10 @@ export const Login = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="请输入用户名"
+                  placeholder="请输入用户名（3-100 个字符）"
                   required
+                  minLength={3}
+                  maxLength={100}
                 />
                 <Input
                   label="邮箱"
@@ -106,8 +131,9 @@ export const Login = () => {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="请输入密码"
+              placeholder="请输入密码（至少 6 位）"
               required
+              minLength={6}
               suffix={
                 <button
                   type="button"

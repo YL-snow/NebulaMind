@@ -11,6 +11,8 @@ interface InputProps {
   onChange?: React.ChangeEventHandler<HTMLInputElement>
   className?: string
   required?: boolean
+  minLength?: number
+  maxLength?: number
 }
 
 export const Input = ({ label, error, prefix, suffix, className = '', ...props }: InputProps) => {
