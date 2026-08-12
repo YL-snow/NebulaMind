@@ -24,7 +24,7 @@
 
 **NebulaMind** 是面向个人与团队的 AI 智能云盘产品，定位是"从存储工具进化为知识助手"。项目围绕"文件检索难、整理耗时长、内容利用率低、敏感信息管控弱"四个真实痛点，从需求分析、方案设计、迭代开发、测试验收到容器化交付，完整走了一遍产品落地闭环。
 
-产品核心体验是"上传 → 理解 → 检索 → 生成"：用户上传文档后，系统自动完成文件解析、AI 分类打标、摘要生成、向量索引；用户可以用自然语言搜索文件、基于单文档或多文档问答，并直接生成摘要、报告和 PPT。安全侧提供敏感内容两级检测、AES-256-GCM 加密和端到端加密；生态侧支持 MinIO/S3、WebDAV 云盘接入。
+产品核心体验是"上传 → 理解 → 检索 → 生成"：用户上传文档后，系统自动完成文件解析、AI 分类打标、摘要生成、向量索引；用户可以用自然语言搜索文件、基于单文档或多文档问答，并直接生成摘要、报告；PPT 大纲与格式转换后端接口已实现，前端页面待接入。安全侧提供敏感内容两级检测、AES-256-GCM 加密和端到端加密；生态侧支持 MinIO/S3、WebDAV 云盘接入。
 
 项目采用双服务架构：Java 21 + Spring Boot 3.2 负责业务与安全，Python FastAPI 负责 AI 推理，前端使用 React 19 + TypeScript + Vite；基础设施包括 PostgreSQL、Redis、RabbitMQ、MinIO 与 Milvus，并通过 Docker Compose 统一编排。5 人团队按 Scrum 节奏在 8 周内完成 V1.0-V2.0 交付，沉淀了需求、架构、数据库、API、测试、部署等完整文档。
 
@@ -41,8 +41,8 @@
 ### 应用案例
 
 - **个人知识管理**：上传文档后 AI 自动分类打标，支持语义搜索精准定位，可基于多文件生成读书报告或研究综述
-- **团队文档协作**：文件版本历史与 diff 对比支持修改追踪，敏感内容自动加密确保合规
-- **内容创作者**：基于云盘素材快速生成演示文稿（PPT）或分析报告，支持格式转换（txt/md → docx）
+- **文件版本管理**：版本历史与 diff 对比支持修改追踪，敏感内容可自动加密确保合规
+- **内容创作者**：基于云盘素材快速生成分析报告；PPT 与格式转换后端接口已实现，前端页面待接入
 - **企业文档安全**：两级敏感检测 + 自动加密机制可用于企业内部文档外发前的安全检查
 
 ---
@@ -64,8 +64,8 @@
 |------|------|
 | 语义搜索 | 基于向量检索的自然语言文件搜索 |
 | 文档问答 | 单文档 RAG 问答 + 跨文档联合问答 |
-| 内容生成 | 摘要提取、要点提炼、报告生成、PPT 生成 |
-| 格式转换 | txt/md → docx 等格式互转 |
+| 内容生成 | 摘要提取、要点提炼、报告生成；PPT 大纲与格式转换接口已实现（前端待接入） |
+| 格式转换 | txt/md → docx 等格式互转（后端接口已实现，前端页面待接入） |
 
 ### 安全合规
 
@@ -74,7 +74,7 @@
 | 敏感内容检测 | 两级检测（正则快速过滤 + LLM 深度分析） |
 | 文件加密 | 高风险文件自动 AES-256-GCM 加密 |
 | 端到端加密 | 浏览器本地 AES-256-GCM 加密，每个文件独立密钥，密钥仅显示一次 |
-| 权限管理 | 基于角色的访问控制（管理员/普通用户） |
+| 权限管理 | 后端预留角色校验与管理接口，前端管理页面未开放 |
 
 ### 平台特性
 
@@ -84,7 +84,7 @@
 - S3 兼容接口
 - Sentinel 限流熔断
 - SkyWalking 调用链追踪（预留）
-- Docker Compose 一键部署
+- Docker Compose 开发/生产编排（生产部署待执行）
 
 ---
 
@@ -101,7 +101,7 @@
 | 后端 | Spring Security + JWT | - | 认证授权 |
 | 后端 | Spring Data JPA | - | ORM |
 | AI 服务 | Python FastAPI | - | AI 推理层 |
-| AI 服务 | LangChain / RAG | - | 文档问答 |
+| AI 服务 | 自研 RAG（Milvus + Embedding + LLM） | - | 文档问答 |
 | 数据库 | PostgreSQL | 15 | 关系型数据库 |
 | 缓存 | Redis | 7.x | 缓存与会话 |
 | 消息队列 | RabbitMQ | 3.x | 异步任务 |
@@ -129,7 +129,7 @@ flowchart TB
     end
 
     subgraph Backend["后端 Spring Boot 3.2"]
-        Controllers[17 个 Controller]
+        Controllers[17 个业务 Controller]
         Services[业务服务层]
         Security[JWT + Spring Security]
         Repositories[JPA Repository]
@@ -226,7 +226,7 @@ flowchart TB
 |------|------|------|
 | V1.0 | 基础架构搭建、文件管理 CRUD、用户认证 | ✅ 完成 |
 | V1.1 | AI 服务集成、语义搜索、文档问答（RAG） | ✅ 完成 |
-| V1.2 | 内容生成（摘要/报告/PPT）、敏感检测 | ✅ 完成 |
+| V1.2 | 内容生成（摘要/报告/PPT 后端）、敏感检测 | ✅ 后端完成；PPT/格式转换前端待接入 |
 | V1.3 | Docker 容器化、性能优化、安全加固 | ✅ 完成 |
 | V2.0 | 存储抽象层重构、WebDAV/S3 兼容 | ✅ 完成 |
 
@@ -258,15 +258,18 @@ flowchart TB
 - JDK 21+（本地开发）
 - Node.js 18+（本地开发）
 
-### 一键启动（推荐）
+### 一键启动（生产编排，需先配置 .env）
 
 ```bash
 # 克隆项目
 git clone https://github.com/YL-snow/NebulaMind.git
 cd NebulaMind
 
-# 启动所有服务
-docker compose up -d
+# 1. 复制并配置环境变量（MAAS_API_KEY、JWT_SECRET、INTERNAL_API_KEY、BACKEND_API_KEY、数据库密码等）
+cp .env.example .env
+
+# 2. 构建并启动全部服务
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 服务启动后访问：
@@ -277,6 +280,9 @@ docker compose up -d
 | 后端 API | http://localhost:8080 |
 | AI 服务 | http://localhost:8081 |
 | MinIO 控制台 | http://localhost:9001 |
+
+注意：仓库根目录 `docker-compose.yml` 只编排 PostgreSQL/Redis/RabbitMQ/MinIO/etcd/Milvus 基础设施，不包含应用服务；本地开发请使用 `docker-compose.dev.yml` 启动基础设施，再分别启动后端、前端和 AI 服务。
+
 
 ### 本地开发
 
@@ -313,7 +319,7 @@ python main.py
 ```
 NebulaMind/
 ├── backend/                     # Spring Boot 后端服务
-│   ├── src/main/java/           # Java 源码（17 个 Controller, 117 个 Java 文件）
+│   ├── src/main/java/           # Java 源码（17 个业务 Controller + 全局异常处理器，117 个 Java 文件）
 │   ├── src/main/resources/      # 配置文件
 │   └── src/test/java/           # 测试代码（7 个 JUnit 测试类）
 ├── frontend/                    # React 前端应用
@@ -325,7 +331,7 @@ NebulaMind/
 │       └── hooks/               # React 自定义 Hooks
 ├── ai-services/                 # Python AI 推理服务
 │   └── app/
-│       ├── api/                 # 11 个 AI API 端点
+│       ├── api/                 # 11 个业务端点 + 4 个辅助端点
 │       ├── services/            # 核心 AI 服务
 │       ├── core/                # LLM 客户端封装
 │       └── workers/             # 异步文件处理器
@@ -333,7 +339,7 @@ NebulaMind/
 │   ├── architecture/            # 架构设计文档
 │   └── database/                # 数据库设计文档
 ├── deploy/                      # 部署脚本
-├── docker-compose.yml           # 开发环境编排
+├── docker-compose.yml           # 基础设施编排（不含应用服务）
 ├── docker-compose.prod.yml      # 生产环境编排
 └── docker-compose.dev.yml       # 本地开发编排
 ```

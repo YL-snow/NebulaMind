@@ -118,6 +118,7 @@ services:
       - OPENAI_LLM_MODEL=deepseek-v3_2
       - MaaS_RATE_LIMIT_MAX=5
       - OPENAI_EMBEDDING_MODEL=qwen3-vl-embedding-8b
+      - BACKEND_API_KEY=${BACKEND_API_KEY}
     volumes:
       - ai-service-logs:/app/logs
     restart: unless-stopped

@@ -63,15 +63,16 @@ CREATE TABLE files (
     hash                VARCHAR(64)     NOT NULL,
     parent_id           UUID,
     user_id             UUID            NOT NULL,
-    status              VARCHAR(20)     NOT NULL DEFAULT 'uploading',
-    ai_status           VARCHAR(20)     NOT NULL DEFAULT 'pending',
+    status              VARCHAR(20)     NOT NULL DEFAULT 'UPLOADING',
+    ai_status           VARCHAR(20)     NOT NULL DEFAULT 'PENDING',
     category            VARCHAR(100),
-    tags                VARCHAR(500)    DEFAULT '[]',
+    tags                JSONB           DEFAULT '[]'::jsonb,
     summary             TEXT,
     ai_error_message    TEXT,
-    sensitive_level     VARCHAR(20)     NOT NULL DEFAULT 'normal',
+    sensitive_level     VARCHAR(20)     NOT NULL DEFAULT 'NORMAL',
     is_encrypted        BOOLEAN         NOT NULL DEFAULT FALSE,
     encryption_key_id   VARCHAR(100),
+    encryption_mode     VARCHAR(20)     NOT NULL DEFAULT 'NONE',
     cloud_drive_file_id VARCHAR(200),                             -- 云盘/OSS文件原始ID（S3/WebDAV 外部存储）
     version             INTEGER         NOT NULL DEFAULT 1,
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
@@ -415,9 +416,10 @@ COMMENT ON COLUMN files.hash IS 'SHA-256文件哈希，用于重复检测';
 COMMENT ON COLUMN files.tags IS 'AI生成的标签数组，JSONB格式';
 COMMENT ON COLUMN files.category IS 'AI分类结果';
 COMMENT ON COLUMN files.summary IS 'AI生成的文档摘要';
-COMMENT ON COLUMN files.sensitive_level IS '敏感等级：normal/low/medium/high';
-COMMENT ON COLUMN files.ai_status IS 'AI处理状态：pending/processing/completed/failed';
+COMMENT ON COLUMN files.sensitive_level IS '敏感等级：NORMAL/LOW/MEDIUM/HIGH';
+COMMENT ON COLUMN files.ai_status IS 'AI处理状态：PENDING/PROCESSING/COMPLETED/FAILED';
 COMMENT ON COLUMN files.cloud_drive_file_id IS '云盘/OSS文件原始ID，用于S3/WebDAV外部存储导入去重';
+COMMENT ON COLUMN files.encryption_mode IS '加密模式：NONE/SERVER/CLIENT';
 COMMENT ON COLUMN cloud_storage_configs.provider_type IS '存储类型：S3（兼容存储）、WEBDAV（WebDAV云盘）';
 COMMENT ON COLUMN file_contents.chunk_metadata IS '分片元数据，如{"page":5,"section":"第三章"}';
 COMMENT ON COLUMN semantic_indexes.metadata IS '分片元数据，如{"page":5,"section":"第三章","title":"标题"}';

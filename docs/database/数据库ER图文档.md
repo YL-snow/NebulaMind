@@ -25,6 +25,7 @@ erDiagram
     files ||--o{ ai_call_logs : "触发"
     files ||--o{ semantic_indexes : "索引"
     files }o--o| files : "父目录(自引用)"
+    users ||--o{ cloud_storage_configs : "配置"
 
     users {
         uuid id PK "用户ID"
@@ -50,14 +51,17 @@ erDiagram
         varchar hash "SHA-256哈希(唯一)"
         uuid parent_id FK "父目录ID(自引用)"
         uuid user_id FK "所属用户ID"
-        varchar status "状态：uploading/processing/completed/failed"
-        varchar ai_status "AI状态：pending/processing/completed/failed"
+        varchar status "状态：UPLOADING/PROCESSING/COMPLETED/FAILED"
+        varchar ai_status "AI状态：PENDING/PROCESSING/COMPLETED/FAILED"
         varchar category "AI分类"
         jsonb tags "AI标签数组"
         text summary "AI摘要"
-        varchar sensitive_level "敏感等级：normal/low/medium/high"
+        text ai_error_message "AI处理失败原因"
+        varchar sensitive_level "敏感等级：NORMAL/LOW/MEDIUM/HIGH"
         boolean is_encrypted "是否加密"
         varchar encryption_key_id "加密密钥ID"
+        varchar encryption_mode "加密模式：NONE/SERVER/CLIENT"
+        varchar cloud_drive_file_id "云盘/OSS文件原始ID"
         integer version "当前版本号"
         timestamp created_at "创建时间"
         timestamp updated_at "更新时间"
@@ -144,6 +148,24 @@ erDiagram
         boolean revoked "是否已撤销"
         timestamp created_at "创建时间"
     }
+
+    cloud_storage_configs {
+        uuid id PK "配置ID"
+        uuid user_id FK "所属用户ID"
+        varchar name "配置名称"
+        varchar provider_type "类型：S3/WEBDAV"
+        varchar endpoint_url "服务地址"
+        varchar access_key "Access Key"
+        varchar secret_key "Secret Key"
+        varchar bucket_name "桶名"
+        varchar region "区域"
+        boolean is_active "是否启用"
+        boolean last_test_success "上次测试是否成功"
+        timestamp last_test_at "上次测试时间"
+        text extra_config "扩展配置"
+        timestamp created_at "创建时间"
+        timestamp updated_at "更新时间"
+    }
 ```
 
 ### 1.2 实体数量统计
@@ -159,6 +181,7 @@ erDiagram
 | ai_call_logs | AI调用日志表 | 100万-1000万 | 保留90天 |
 | audit_logs | 审计日志表 | 10万-100万 | 保留180天 |
 | refresh_tokens | 刷新令牌表 | 1万-10万 | 过期自动清理 |
+| cloud_storage_configs | 云存储配置表 | 1-50 | 永久 |
 
 ---
 
@@ -198,14 +221,17 @@ erDiagram
 | hash | VARCHAR(64) | NOT NULL | SHA-256哈希 |
 | parent_id | UUID | NULLABLE, FK → files.id | 父目录ID |
 | user_id | UUID | NOT NULL, FK → users.id | 所属用户 |
-| status | VARCHAR(20) | NOT NULL, DEFAULT 'uploading' | 状态 |
-| ai_status | VARCHAR(20) | NOT NULL, DEFAULT 'pending' | AI状态 |
+| status | VARCHAR(20) | NOT NULL, DEFAULT 'UPLOADING' | 状态 |
+| ai_status | VARCHAR(20) | NOT NULL, DEFAULT 'PENDING' | AI状态 |
 | category | VARCHAR(100) | NULLABLE | AI分类 |
 | tags | JSONB | NULLABLE, DEFAULT '[]' | AI标签数组 |
 | summary | TEXT | NULLABLE | AI摘要 |
-| sensitive_level | VARCHAR(20) | NOT NULL, DEFAULT 'normal' | 敏感等级 |
+| ai_error_message | TEXT | NULLABLE | AI处理失败原因 |
+| sensitive_level | VARCHAR(20) | NOT NULL, DEFAULT 'NORMAL' | 敏感等级 |
 | is_encrypted | BOOLEAN | NOT NULL, DEFAULT FALSE | 是否加密 |
 | encryption_key_id | VARCHAR(100) | NULLABLE | 加密密钥ID |
+| encryption_mode | VARCHAR(20) | NULLABLE, DEFAULT 'NONE' | 加密模式：NONE/SERVER/CLIENT |
+| cloud_drive_file_id | VARCHAR(200) | NULLABLE | 云盘/OSS文件原始ID（S3/WebDAV外部存储） |
 | version | INTEGER | NOT NULL, DEFAULT 1 | 当前版本号 |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | 创建时间 |
 | updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | 更新时间 |
@@ -276,6 +302,8 @@ erDiagram
 - `idx_permissions_user_id` ON (user_id)
 - `idx_permissions_file_user_type` UNIQUE ON (file_id, user_id, permission_type) WHERE user_id IS NOT NULL
 - `idx_permissions_expires_at` ON (expires_at) WHERE expires_at IS NOT NULL
+
+> 实现状态：该表已包含在 DDL 与种子数据中；Java 后端当前未实现 Permission 实体与共享/权限接口，属权限管理规划预留。
 
 ### 2.6 semantic_indexes（语义索引表）
 
@@ -361,6 +389,31 @@ erDiagram
 - `idx_refresh_tokens_hash` ON (token_hash) UNIQUE
 - `idx_refresh_tokens_expires_at` ON (expires_at) WHERE revoked = FALSE
 
+### 2.10 cloud_storage_configs（云存储配置表）
+
+| 字段名 | 类型 | 约束 | 说明 |
+|--------|------|------|------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | 配置ID |
+| user_id | UUID | NOT NULL, FK → users.id | 所属用户 |
+| name | VARCHAR(100) | NOT NULL | 配置名称 |
+| provider_type | VARCHAR(20) | NOT NULL | 类型：S3/WEBDAV |
+| endpoint_url | VARCHAR(500) | NULLABLE | 服务地址 |
+| access_key | VARCHAR(256) | NULLABLE | Access Key |
+| secret_key | VARCHAR(512) | NULLABLE | Secret Key（服务端加密存储） |
+| bucket_name | VARCHAR(100) | NULLABLE | 桶名 |
+| region | VARCHAR(50) | NULLABLE | 区域 |
+| is_active | BOOLEAN | NOT NULL, DEFAULT FALSE | 是否启用 |
+| last_test_success | BOOLEAN | NULLABLE | 上次测试是否成功 |
+| last_test_at | TIMESTAMPTZ | NULLABLE | 上次测试时间 |
+| extra_config | TEXT | NULLABLE | 扩展配置 |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | 创建时间 |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | 更新时间 |
+
+**索引**：
+- `idx_cloud_storage_user_id` ON (user_id)
+- `idx_cloud_storage_provider` ON (provider_type)
+- `idx_cloud_storage_user_provider_name` UNIQUE ON (user_id, provider_type, name)
+
 ---
 
 ## 3. 外键关系
@@ -380,6 +433,7 @@ erDiagram
 | fk_ai_call_logs_user | ai_call_logs.user_id | users.id | RESTRICT | 禁止删除有调用记录的用户 |
 | fk_audit_logs_user | audit_logs.user_id | users.id | SET NULL | 删除用户时，审计记录保留 |
 | fk_refresh_tokens_user | refresh_tokens.user_id | users.id | CASCADE | 删除用户时，Token级联删除 |
+| fk_cloud_storage_user | cloud_storage_configs.user_id | users.id | CASCADE | 删除用户时，云存储配置级联删除 |
 
 ---
 

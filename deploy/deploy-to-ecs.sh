@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ECS_HOST="121.41.224.122"
+ECS_HOST="<ECS_SERVER_IP>"
 ECS_USER="root"
 PROJECT_NAME="nebulamind"
 DEPLOY_DIR="/opt/$PROJECT_NAME"

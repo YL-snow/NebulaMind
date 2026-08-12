@@ -384,6 +384,8 @@ POST /api/v1/files/{fileId}/process-callback
 | POST | `/api/v1/generate/ppt` | 生成 PPT 大纲，body `{"fileIds": [...], "topic": "..."}` |
 | POST | `/api/v1/generate/convert` | 格式转换，body `{"fileId": "...", "targetFormat": "docx"}` |
 
+> 说明：`/api/v1/generate/ppt` 与 `/api/v1/generate/convert` 为后端接口，前端生成页入口待接入。
+
 响应统一为：
 
 ```json
@@ -561,7 +563,7 @@ GET /api/v1/public/info
 
 ## 13. AI 服务内部接口（FastAPI）
 
-Java 后端通过 `http://localhost:8081` 调用，请求头必须携带 `X-API-Key`。核心端点共 11 个：
+Java 后端默认通过 `http://localhost:8081` 调用 AI 服务；配置 `AI_SERVICE_API_KEY` 后请求头携带 `X-API-Key`，未配置或调试模式下不做强校验。业务端点共 11 个，另有 4 个辅助端点：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -578,6 +580,8 @@ Java 后端通过 `http://localhost:8081` 调用，请求头必须携带 `X-API-
 | POST | `/api/v1/sensitive/mask` | 敏感脱敏 |
 
 辅助端点：`GET /health`、`GET /api/v1/stats`、`GET /api/v1/logs/export`、`GET /api/v1/prompts`。
+
+AI 服务回调后端 `/api/v1/files/{fileId}/process-callback` 时使用 `X-Internal-Api-Key`（由后端 `INTERNAL_API_KEY` 配置），与对外调用 AI 服务的 `X-API-Key` 不同。
 
 AI 服务响应模型：
 

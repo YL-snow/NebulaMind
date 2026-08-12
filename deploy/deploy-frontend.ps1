@@ -1,5 +1,5 @@
 # 部署前端镜像到 ECS 服务器（修复版：使用 docker-compose）
-$ECS_HOST = "121.41.224.122"
+$ECS_HOST = "<ECS_SERVER_IP>"
 $ECS_USER = "root"
 $TAG = "v$(Get-Date -Format 'yyyyMMddHHmmss')"
 
@@ -21,5 +21,5 @@ Write-Host "`n=== 步骤4: 验证 ===" -ForegroundColor Cyan
 ssh $ECS_USER@$ECS_HOST "docker exec nebulamind-frontend sh -c 'cat /usr/share/nginx/html/index.html | grep src='"
 
 Write-Host "`n=== 完成！===" -ForegroundColor Green
-Write-Host "现在刷新 http://121.41.224.122/ 应该可以正常登录" -ForegroundColor Yellow
+Write-Host "现在刷新 http://$ECS_HOST/ 应该可以正常登录" -ForegroundColor Yellow
 Write-Host "登录后访问 /security 查看安全管理页面" -ForegroundColor Yellow
