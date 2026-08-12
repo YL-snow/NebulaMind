@@ -1,1464 +1,619 @@
-# API规范文档
+# NebulaMind API 规范文档
 
-**文档版本**：v1.0  
-**创建日期**：2026年7月11日  
-**所属团队**：云盘智能体开发团队  
-
----
-
-## 1. API设计总则
-
-### 1.1 设计原则
-
-| 原则 | 说明 |
-|------|------|
-| **RESTful风格** | 资源导向设计，使用HTTP方法表示操作 |
-| **统一前缀** | 所有API以 `/api/v1/` 为前缀 |
-| **JSON格式** | 请求体和响应体统一使用JSON |
-| **无状态** | 服务端不保存客户端状态，认证信息通过Token传递 |
-| **版本控制** | URL路径版本号，向后兼容 |
-| **统一响应格式** | 所有接口返回统一的数据结构 |
-
-### 1.2 API命名规范
-
-| 规范 | 规则 | 示例 |
-|------|------|------|
-| 路径 | 小写字母，单词间用连字符(-)分隔 | `/api/v1/file-list` |
-| 参数 | 驼峰命名(camelCase) | `?pageSize=20` |
-| 请求体 | 驼峰命名(camelCase) | `{"fileId": "uuid"}` |
-| 响应体 | 驼峰命名(camelCase) | `{"totalCount": 100}` |
-
-### 1.3 HTTP方法语义
-
-| 方法 | 语义 | 幂等 | 安全 | 示例 |
-|------|------|------|------|------|
-| GET | 查询资源 | 是 | 是 | 获取文件列表 |
-| POST | 创建资源/执行操作 | 否 | 否 | 上传文件 |
-| PUT | 完整更新资源 | 是 | 否 | 更新文件信息 |
-| PATCH | 部分更新资源 | 否 | 否 | 更新文件标签 |
-| DELETE | 删除资源 | 是 | 否 | 删除文件 |
+**文档版本**：v2.0
+**最后更新**：2026-08-12
+**说明**：本文档与当前代码实现保持一致。若实现发生变化，请同步更新本文档。
 
 ---
 
-## 2. 统一响应格式
+## 1. 接口约定
 
-### 2.1 成功响应
+### 1.1 服务地址
 
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {},
-  "requestId": "req-uuid",
-  "timestamp": "2026-07-11T10:00:00Z"
-}
-```
+| 服务 | 本地地址 | 说明 |
+|------|---------|------|
+| 后端 API | `http://localhost:8080` | Spring Boot，业务接口统一使用 `/api/v1` 前缀 |
+| AI 服务 | `http://localhost:8081` | Python FastAPI，仅供后端内部调用 |
+| 前端开发服务 | `http://localhost:5173` | Vite Dev Server，`/api/v1` 由 Vite 代理到后端 |
 
-### 2.2 错误响应
+### 1.2 认证方式
 
-```json
-{
-  "code": 400,
-  "message": "参数校验失败",
-  "data": {
-    "errors": [
-      {
-        "field": "fileName",
-        "message": "文件名不能为空"
-      }
-    ]
-  },
-  "requestId": "req-uuid",
-  "timestamp": "2026-07-11T10:00:00Z"
-}
-```
+- 除免认证接口外，请求头必须携带 `Authorization: Bearer <accessToken>`。
+- 免认证接口：`/api/v1/auth/**`、`/api/v1/public/**`、`/api/v1/files/*/process-callback`、`/webdav/**`、`/s3/**`、`/sse/**`。
+- 管理员接口：`/api/v1/admin/**` 需要 `ADMIN` 角色。
 
-### 2.3 分页响应
+### 1.3 响应格式
+
+成功响应直接返回实体、`Page<T>`、`List<T>` 或 `Map`，不包一层 `{code, message, data}`。
+
+分页接口使用 Spring Data `Page<T>` 结构，页码从 0 开始：
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "items": [],
-    "page": 1,
-    "pageSize": 20,
-    "totalCount": 100,
-    "totalPages": 5
-  },
-  "requestId": "req-uuid",
-  "timestamp": "2026-07-11T10:00:00Z"
+  "content": [],
+  "pageable": { "page": 0, "size": 20 },
+  "totalElements": 100,
+  "totalPages": 5,
+  "last": false,
+  "first": true,
+  "size": 20,
+  "number": 0,
+  "numberOfElements": 0,
+  "empty": false
 }
 ```
 
-### 2.4 错误码定义
+### 1.4 错误响应
 
-| 错误码 | 说明 | 处理方式 |
-|--------|------|---------|
-| 200 | 成功 | - |
-| 400 | 请求参数错误 | 检查请求参数 |
-| 401 | 未认证 | 重新登录获取Token |
-| 403 | 无权限 | 检查用户权限 |
-| 404 | 资源不存在 | 检查资源ID |
-| 409 | 资源冲突 | 处理冲突后重试 |
-| 413 | 请求体过大 | 减小请求体大小 |
-| 429 | 请求频率过高 | 等待后重试 |
-| 500 | 服务器内部错误 | 联系运维 |
-| 502 | 上游服务不可用 | 稍后重试 |
-| 503 | 服务暂时不可用 | 稍后重试 |
+全局异常统一返回：
+
+```json
+{
+  "timestamp": "2026-08-12T10:00:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "校验失败的具体原因"
+}
+```
+
+部分接口在业务层直接返回 `{"error": "..."}`（如安全加密、短信验证码等），HTTP 状态码语义相同。
+
+---
+
+## 2. 认证接口
+
+| 方法 | 路径 | 认证 | 说明 |
+|------|------|------|------|
+| POST | `/api/v1/auth/register` | 否 | 邮箱注册 |
+| POST | `/api/v1/auth/login` | 否 | 邮箱密码登录 |
+| POST | `/api/v1/auth/refresh` | 否 | 刷新 Token，query 参数传 `token` |
+| POST | `/api/v1/auth/logout` | 否 | 登出，query 参数传 `token` |
+| POST | `/api/v1/auth/sms/send` | 否 | 发送短信验证码 |
+| POST | `/api/v1/auth/sms/login` | 否 | 短信验证码登录 |
+| POST | `/api/v1/auth/sms/register` | 否 | 短信验证码注册 |
+| POST | `/api/v1/auth/change-password` | 是 | 修改密码 |
+
+### 2.1 注册 / 登录
+
+`POST /api/v1/auth/register`
+
+```json
+{
+  "username": "zhangsan",
+  "email": "zhangsan@example.com",
+  "password": "your-password",
+  "displayName": "张三"
+}
+```
+
+校验规则：用户名 2-100 位，邮箱合法，密码至少 6 位，显示名不超过 100 位。
+
+`POST /api/v1/auth/login`
+
+```json
+{
+  "email": "admin@nebulamind.com",
+  "password": "your-password"
+}
+```
+
+注册和登录均返回：
+
+```json
+{
+  "userId": "a1000001-0000-0000-0000-000000000001",
+  "email": "admin@nebulamind.com",
+  "displayName": "系统管理员",
+  "role": "admin",
+  "accessToken": "jwt-access-token",
+  "refreshToken": "jwt-refresh-token"
+}
+```
+
+### 2.2 刷新 / 登出
+
+```text
+POST /api/v1/auth/refresh?token=<refreshToken>
+POST /api/v1/auth/logout?token=<refreshToken>
+```
+
+刷新成功返回新的 `AuthResponse`。
+
+### 2.3 短信验证码
+
+- `POST /api/v1/auth/sms/send`：body `{"phone": "13800138000"}`，返回 `{"success": true, "message": "验证码已发送"}`。
+- `POST /api/v1/auth/sms/login`：body `{"phone": "...", "code": "..."}`，成功返回 `AuthResponse`。
+- `POST /api/v1/auth/sms/register`：body `{"phone": "...", "code": "...", "username": "...", "displayName": "...", "password": "..."}`，成功返回 `AuthResponse`。
+
+### 2.4 修改密码
+
+`POST /api/v1/auth/change-password`
+
+```json
+{
+  "currentPassword": "your-password",
+  "newPassword": "NewPass@2026"
+}
+```
+
+成功返回 `{"success": true, "message": "密码修改成功"}`。
 
 ---
 
 ## 3. 文件管理接口
 
-### 3.1 上传文件
+### 3.1 文件列表
 
+```text
+GET /api/v1/files?page=0&size=20
 ```
+
+仅返回当前用户的文件，按创建时间倒序。响应为 `Page<File>`。
+
+### 3.2 文件详情 / 下载
+
+```text
+GET /api/v1/files/{fileId}
+GET /api/v1/files/{fileId}/download
+```
+
+- 详情返回 `File` 实体，包含 `id/name/path/size/mimeType/fileType/hash/status/aiStatus/category/tags/summary/sensitiveLevel/isEncrypted/encryptionMode/version` 等字段。
+- 下载返回文件二进制流；服务端 AES-256-GCM 加密的文件会自动解密，端到端加密文件下载后需在本地解密。
+
+### 3.3 普通上传
+
+```text
 POST /api/v1/files/upload
 ```
 
-**请求**：`multipart/form-data`
+`multipart/form-data` 参数：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| file | File | 是 | 上传的文件 |
-| parentId | String | 否 | 父目录ID |
-| encrypt | Boolean | 否 | 是否加密存储，默认false |
+| file | File | 是 | 上传文件 |
+| encrypted | Boolean | 否 | `true` 表示标记为端到端加密文件，服务器无法分析内容 |
 
-**响应**：
+响应为 `File` 实体。
+
+### 3.4 JSON 创建文件
+
+```text
+POST /api/v1/files
+```
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": "file-uuid",
-    "name": "document.pdf",
-    "path": "/documents/document.pdf",
-    "size": 1024000,
-    "mimeType": "application/pdf",
-    "hash": "sha256-hash",
-    "status": "uploading",
-    "createdAt": "2026-07-11T10:00:00Z"
-  }
+  "name": "document.pdf",
+  "path": "optional/path",
+  "size": 1024000,
+  "mimeType": "application/pdf",
+  "content": "base64 或文本内容"
 }
 ```
 
-### 3.2 分片上传初始化
+响应为 `File` 实体。
 
-```
-POST /api/v1/files/upload/multipart-init
-```
+### 3.5 分片上传（后端已实现，前端待接入）
 
-**请求**：
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/files/upload/init` | 初始化分片上传 |
+| POST | `/api/v1/files/upload/chunk` | 上传单个分片，最后一片自动合并 |
+| POST | `/api/v1/files/upload/cancel` | 取消上传 |
+
+`POST /api/v1/files/upload/init`
 
 ```json
 {
   "fileName": "large-file.zip",
+  "contentType": "application/zip",
   "fileSize": 104857600,
-  "mimeType": "application/zip",
-  "chunkCount": 10,
-  "parentId": "parent-uuid"
+  "chunkIndex": 0,
+  "totalChunks": 20,
+  "uploadId": "client-upload-id",
+  "fileHash": "sha256-of-file"
 }
 ```
 
-**响应**：
+返回：
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "uploadId": "upload-uuid",
-    "chunkSize": 10485760,
-    "chunkCount": 10
-  }
+  "uploadId": "server-upload-id",
+  "totalChunks": "20"
 }
 ```
 
-### 3.3 上传分片
+若检测到重复文件，返回 `{"message": "Duplicate file detected", "existingFileId": "..."}`。
 
-```
-POST /api/v1/files/upload/multipart-chunk
-```
-
-**请求**：`multipart/form-data`
+`POST /api/v1/files/upload/chunk`，`multipart/form-data`：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| uploadId | String | 是 | 分片上传ID |
-| chunkIndex | Integer | 是 | 分片索引(0-based) |
-| file | File | 是 | 分片文件内容 |
+| uploadId | String | 是 | init 返回的 uploadId |
+| chunkIndex | Integer | 是 | 分片序号，从 0 开始 |
+| chunk | File | 是 | 分片内容，单片上限 5MB |
 
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "uploadId": "upload-uuid",
-    "chunkIndex": 0,
-    "etag": "chunk-etag"
-  }
-}
-```
-
-### 3.4 合并分片
-
-```
-POST /api/v1/files/upload/multipart-complete
-```
-
-**请求**：
+返回：
 
 ```json
 {
-  "uploadId": "upload-uuid"
+  "fileId": "merge 完成后返回",
+  "fileName": "large-file.zip",
+  "uploadId": "server-upload-id",
+  "chunkIndex": 19,
+  "totalChunks": 20,
+  "completed": true,
+  "message": "合并完成"
 }
 ```
 
-**响应**：
+### 3.6 更新 / 删除
 
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": "file-uuid",
-    "name": "large-file.zip",
-    "size": 104857600,
-    "status": "processing",
-    "createdAt": "2026-07-11T10:00:00Z"
-  }
-}
-```
-
-### 3.5 获取文件列表
-
-```
-GET /api/v1/files?page=1&pageSize=20&parentId=&sortBy=createdAt&sortOrder=desc&category=&tag=
-```
-
-**参数**：
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|-------|------|
-| page | Integer | 否 | 1 | 页码 |
-| pageSize | Integer | 否 | 20 | 每页数量 |
-| parentId | String | 否 | - | 父目录ID |
-| sortBy | String | 否 | createdAt | 排序字段 |
-| sortOrder | String | 否 | desc | 排序方向 |
-| category | String | 否 | - | 分类筛选 |
-| tag | String | 否 | - | 标签筛选 |
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "items": [
-      {
-        "id": "file-uuid",
-        "name": "document.pdf",
-        "size": 1024000,
-        "mimeType": "application/pdf",
-        "type": "pdf",
-        "tags": ["报告", "财务"],
-        "category": "财务报告",
-        "status": "completed",
-        "sensitiveLevel": "normal",
-        "createdAt": "2026-07-11T10:00:00Z",
-        "updatedAt": "2026-07-11T10:05:00Z"
-      }
-    ],
-    "page": 1,
-    "pageSize": 20,
-    "totalCount": 100,
-    "totalPages": 5
-  }
-}
-```
-
-### 3.6 获取文件详情
-
-```
-GET /api/v1/files/{fileId}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": "file-uuid",
-    "name": "document.pdf",
-    "path": "/documents/document.pdf",
-    "size": 1024000,
-    "mimeType": "application/pdf",
-    "type": "pdf",
-    "hash": "sha256-hash",
-    "tags": ["报告", "财务"],
-    "category": "财务报告",
-    "summary": "本报告总结了公司2024年度的财务状况...",
-    "sensitiveLevel": "normal",
-    "isEncrypted": false,
-    "aiStatus": "completed",
-    "aiResult": {
-      "tags": ["报告", "财务"],
-      "category": "财务报告",
-      "summary": "本报告总结了公司2024年度的财务状况...",
-      "keywords": ["营收", "利润", "成本"],
-      "sensitiveItems": []
-    },
-    "version": 1,
-    "createdAt": "2026-07-11T10:00:00Z",
-    "updatedAt": "2026-07-11T10:05:00Z",
-    "createdBy": {
-      "id": "user-uuid",
-      "name": "用户名"
-    }
-  }
-}
-```
-
-### 3.7 删除文件
-
-```
+```text
+PUT /api/v1/files/{fileId}
 DELETE /api/v1/files/{fileId}
 ```
 
-**响应**：
+更新支持 `{"name": "新名称", "tags": "标签文本"}`。
 
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": null
-}
-```
+### 3.7 智能分类与重复检测
 
-### 3.8 下载文件
-
-```
-GET /api/v1/files/{fileId}/download
-```
-
-**响应**：文件二进制流
-
-| 响应头 | 值 |
-|--------|-----|
-| Content-Type | application/octet-stream |
-| Content-Disposition | attachment; filename="document.pdf" |
-| Content-Length | 1024000 |
-
-### 3.9 智能分类
-
-```
+```text
 POST /api/v1/files/{fileId}/classify
+GET /api/v1/files/duplicates?hash=<sha256>
 ```
 
-**响应**：
+分类返回：
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "category": "财务报告",
-    "tags": ["报告", "财务"],
-    "confidence": 0.92,
-    "processingTime": 1850
-  }
+  "fileId": "uuid",
+  "category": "Word文档",
+  "tags": ["Word", "文档"],
+  "confidence": 0.85,
+  "processingTime": 120
 }
 ```
 
-### 3.10 重复检测
+重复检测返回重复分组数组，每组包含 `hash` 和 `files: [{id, name, size}]`。
 
-```
-GET /api/v1/files/duplicates?hash={sha256-hash}
+### 3.8 处理回调
+
+```text
+POST /api/v1/files/{fileId}/process-callback
 ```
 
-**响应**：
+供 AI 服务或异步任务回调更新文件处理结果，免认证。
+
+---
+
+## 4. 文件版本接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/files/{fileId}/versions` | 版本历史列表 |
+| GET | `/api/v1/files/{fileId}/versions/{versionNumber}` | 指定版本详情 |
+| POST | `/api/v1/files/{fileId}/versions` | 创建文本版本，body `{"content": "...", "comment": "..."}` |
+| POST | `/api/v1/files/{fileId}/versions/upload` | 上传新版本，multipart `file`、可选 `comment`、`encrypted` |
+| GET | `/api/v1/files/{fileId}/versions/diff?versionA=1&versionB=2` | 版本 diff |
+| POST | `/api/v1/files/{fileId}/versions/summary` | AI 生成版本变化摘要，body 可选 `versionA/versionB` |
+| POST | `/api/v1/files/{fileId}/versions/rollback/{targetVersion}` | 回滚到指定版本 |
+| GET | `/api/v1/files/{fileId}/versions/history` | 编辑痕迹追踪 |
+
+回滚返回：
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "isDuplicate": true,
-    "duplicateOf": {
-      "id": "file-uuid",
-      "name": "document.pdf",
-      "size": 1024000,
-      "createdAt": "2026-07-11T10:00:00Z"
-    },
-    "similarFiles": []
-  }
+  "fileId": "uuid",
+  "currentVersion": 3,
+  "rolledBackFrom": 1,
+  "message": "文件已回滚到版本 1"
 }
 ```
 
 ---
 
-## 4. 语义检索接口
+## 5. 语义检索与问答
 
-### 4.1 语义搜索
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/search` | 语义搜索，AI 不可用时按文件名/标签回退 |
+| POST | `/api/v1/qa` | 单文档问答 |
+| POST | `/api/v1/qa/cross` | 跨文档问答 |
 
-```
-POST /api/v1/search
-```
-
-**请求**：
+`POST /api/v1/search`
 
 ```json
 {
-  "query": "去年的销售数据",
-  "page": 1,
-  "pageSize": 10,
-  "category": "",
-  "tags": [],
-  "fileTypes": ["pdf", "docx"]
+  "query": "去年销售数据",
+  "fileIds": ["uuid-1", "uuid-2"],
+  "topK": 10,
+  "page": 0,
+  "pageSize": 10
 }
 ```
 
-**响应**：
+`fileIds` 不传时默认检索当前用户最近 500 个文件。响应：
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "query": "去年的销售数据",
-    "items": [
-      {
-        "fileId": "file-uuid",
-        "fileName": "销售数据分析.xlsx",
-        "fileType": "xlsx",
-        "size": 512000,
-        "relevance": 0.92,
-        "summary": "2024年度销售总额达到1.2亿元...",
-        "highlights": ["销售", "数据", "2024"],
-        "matchedChunks": [
-          {
-            "content": "2024年度销售总额达到1.2亿元...",
-            "score": 0.92,
-            "page": 1
-          }
-        ]
-      }
-    ],
-    "totalCount": 15,
-    "page": 1,
-    "pageSize": 10
-  }
-}
-```
-
-### 4.2 文档问答
-
-```
-POST /api/v1/qa
-```
-
-**请求**：
-
-```json
-{
-  "question": "去年的净利润是多少？",
-  "fileId": "file-uuid",
-  "stream": false
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "question": "去年的净利润是多少？",
-    "answer": "根据2024年度财务报告，公司去年的净利润为5.2亿元，同比增长18.3%。",
-    "sources": [
-      {
-        "fileId": "file-uuid",
-        "fileName": "2024年度财务报告.pdf",
-        "chunkContent": "2024年度净利润达到5.2亿元...",
-        "relevance": 0.95,
-        "page": 5
-      }
-    ],
-    "tokenUsage": {
-      "promptTokens": 3892,
-      "completionTokens": 36,
-      "totalTokens": 3928
+  "query": "去年销售数据",
+  "items": [
+    {
+      "fileId": "uuid",
+      "fileName": "销售数据分析.xlsx",
+      "fileType": "xlsx",
+      "size": 512000,
+      "relevance": 0.92,
+      "summary": "命中片段",
+      "highlights": ["片段"],
+      "matchedChunks": []
     }
-  }
+  ],
+  "totalCount": 15,
+  "page": 0,
+  "pageSize": 10
 }
 ```
 
-### 4.3 跨文件问答
+`POST /api/v1/qa` body：`{"question": "...", "fileId": "..."}`。
+`POST /api/v1/qa/cross` body：`{"question": "...", "fileIds": ["uuid-1", "uuid-2"]}`。
 
-```
-POST /api/v1/qa/cross
-```
-
-**请求**：
+问答响应：
 
 ```json
 {
-  "question": "对比各季度的销售数据",
-  "fileIds": ["file-uuid-1", "file-uuid-2"],
-  "stream": false
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "question": "对比各季度的销售数据",
-    "answer": "根据销售数据报告，Q1销售额为2500万，Q2为3200万...",
-    "sources": [
-      {
-        "fileId": "file-uuid-1",
-        "fileName": "Q1销售报告.pdf",
-        "chunkContent": "Q1销售额达到2500万元...",
-        "relevance": 0.93
-      },
-      {
-        "fileId": "file-uuid-2",
-        "fileName": "Q2销售报告.pdf",
-        "chunkContent": "Q2销售额达到3200万元...",
-        "relevance": 0.91
-      }
-    ]
-  }
+  "question": "文档中的关键技术是什么？",
+  "answer": "基于检索增强生成的回答",
+  "sourceFileId": "uuid",
+  "sourceSnippets": ["引用片段"],
+  "confidence": 0.92
 }
 ```
 
 ---
 
-## 5. 内容生成接口
+## 6. 内容生成
 
-### 5.1 生成摘要
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/generate/summary` | 生成摘要，body `{"fileId": "..."}` |
+| POST | `/api/v1/generate/extract` | 内容提炼，body `{"fileId": "..."}` |
+| POST | `/api/v1/generate/report` | 生成报告，body `{"fileIds": [...], "topic": "..."}` |
+| POST | `/api/v1/generate/ppt` | 生成 PPT 大纲，body `{"fileIds": [...], "topic": "..."}` |
+| POST | `/api/v1/generate/convert` | 格式转换，body `{"fileId": "...", "targetFormat": "docx"}` |
 
-```
-POST /api/v1/generate/summary
-```
-
-**请求**：
-
-```json
-{
-  "fileId": "file-uuid",
-  "maxLength": 200,
-  "style": "concise"
-}
-```
-
-**参数说明**：
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|-------|------|
-| fileId | String | 是 | - | 文件ID |
-| maxLength | Integer | 否 | 200 | 摘要最大字数 |
-| style | String | 否 | concise | 风格：concise/detailed/bullet |
-
-**响应**：
+响应统一为：
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "summary": "本报告总结了公司2024年度的财务状况，总营收达到5.8亿元...",
-    "style": "concise",
-    "wordCount": 186,
-    "processingTime": 2340
-  }
-}
-```
-
-### 5.2 内容提炼
-
-```
-POST /api/v1/generate/extract
-```
-
-**请求**：
-
-```json
-{
-  "fileId": "file-uuid",
-  "extractType": "keywords",
-  "maxItems": 10
-}
-```
-
-**参数说明**：
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|-------|------|
-| fileId | String | 是 | - | 文件ID |
-| extractType | String | 是 | - | 提取类型：keywords/keypoints/entities |
-| maxItems | Integer | 否 | 10 | 最大提取数量 |
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "extractType": "keywords",
-    "items": ["营收增长", "成本控制", "利润提升", "市场拓展", "产品创新"],
-    "processingTime": 1560
-  }
-}
-```
-
-### 5.3 生成报告
-
-```
-POST /api/v1/generate/report
-```
-
-**请求**：
-
-```json
-{
-  "fileIds": ["file-uuid-1", "file-uuid-2"],
-  "reportType": "analysis",
-  "title": "2024年度财务分析报告",
-  "style": "formal",
+  "fileId": "uuid",
+  "content": "生成的 markdown 内容",
+  "keyPoints": ["要点1", "要点2"],
   "format": "markdown"
 }
 ```
 
-**参数说明**：
+注意事项：
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|-------|------|
-| fileIds | String[] | 是 | - | 素材文件ID列表 |
-| reportType | String | 是 | - | 报告类型：analysis/summary/meeting |
-| title | String | 否 | - | 报告标题 |
-| style | String | 否 | formal | 风格：formal/concise/detailed |
-| format | String | 否 | markdown | 输出格式：markdown/html |
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "title": "2024年度财务分析报告",
-    "content": "# 2024年度财务分析报告\n\n## 概述\n...",
-    "format": "markdown",
-    "wordCount": 2500,
-    "sources": ["file-uuid-1", "file-uuid-2"],
-    "processingTime": 8560
-  }
-}
-```
-
-### 5.4 生成PPT
-
-```
-POST /api/v1/generate/ppt
-```
-
-**请求**：
-
-```json
-{
-  "fileIds": ["file-uuid-1", "file-uuid-2"],
-  "title": "2024年度财务分析报告",
-  "template": "professional",
-  "slideCount": 10
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "title": "2024年度财务分析报告",
-    "downloadUrl": "/api/v1/files/ppt-uuid/download",
-    "slideCount": 10,
-    "processingTime": 12500
-  }
-}
-```
+- 图片文件使用视觉模型（元景 YuanjingVL）直接分析。
+- 压缩包（zip/rar/7z/gz 等）返回提示：请先解压后上传再生成。
+- 端到端加密文件返回提示：服务器无法读取内容，请本地解密后再使用。
+- MaaS 限流（5 次/分钟）时返回明确的限流提示。
 
 ---
 
-## 6. 安全协作接口
+## 7. 安全与加密
 
-### 6.1 敏感检测
-
-```
-POST /api/v1/security/detect
-```
-
-**请求**：
-
-```json
-{
-  "fileId": "file-uuid"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "sensitiveLevel": "high",
-    "sensitiveItems": [
-      {
-        "type": "id_card",
-        "content": "110101****1234",
-        "position": "第3页第2段",
-        "riskLevel": "high"
-      },
-      {
-        "type": "phone",
-        "content": "138****1234",
-        "position": "第5页第1段",
-        "riskLevel": "medium"
-      }
-    ],
-    "processingTime": 3200
-  }
-}
-```
-
-### 6.2 加密文件
-
-```
-POST /api/v1/security/encrypt
-```
-
-**请求**：
-
-```json
-{
-  "fileId": "file-uuid",
-  "reason": "文件包含敏感信息"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "isEncrypted": true,
-    "encryptedAt": "2026-07-11T10:00:00Z",
-    "keyId": "key-uuid"
-  }
-}
-```
-
-### 6.3 权限推荐
-
-```
-POST /api/v1/collab/recommend
-```
-
-**请求**：
-
-```json
-{
-  "fileId": "file-uuid"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "recommendations": [
-      {
-        "userId": "user-uuid",
-        "userName": "协作人",
-        "suggestedPermission": "read",
-        "reason": "该用户经常访问同类型文件",
-        "confidence": 0.85
-      }
-    ]
-  }
-}
-```
-
-### 6.4 版本历史
-
-```
-GET /api/v1/collab/history/{fileId}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "versions": [
-      {
-        "version": 3,
-        "fileSize": 1048576,
-        "modifiedBy": {
-          "id": "user-uuid",
-          "name": "用户名"
-        },
-        "comment": "更新数据",
-        "createdAt": "2026-07-11T12:00:00Z"
-      },
-      {
-        "version": 2,
-        "fileSize": 1024000,
-        "modifiedBy": {
-          "id": "user-uuid",
-          "name": "用户名"
-        },
-        "comment": "修正错误",
-        "createdAt": "2026-07-11T11:00:00Z"
-      },
-      {
-        "version": 1,
-        "fileSize": 1000000,
-        "modifiedBy": {
-          "id": "user-uuid",
-          "name": "用户名"
-        },
-        "comment": "初始版本",
-        "createdAt": "2026-07-10T10:00:00Z"
-      }
-    ]
-  }
-}
-```
-
----
-
-## 7. 用户认证接口
-
-### 7.1 用户登录
-
-```
-POST /api/v1/auth/login
-```
-
-**请求**：
-
-```json
-{
-  "username": "user@example.com",
-  "password": "encrypted-password"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "accessToken": "jwt-access-token",
-    "refreshToken": "jwt-refresh-token",
-    "tokenType": "Bearer",
-    "expiresIn": 900,
-    "user": {
-      "id": "user-uuid",
-      "username": "user@example.com",
-      "displayName": "用户名",
-      "role": "admin",
-      "avatar": "https://avatars.nebulamind.com/user-uuid.png"
-    }
-  }
-}
-```
-
-### 7.2 刷新Token
-
-```
-POST /api/v1/auth/refresh
-```
-
-**请求**：
-
-```json
-{
-  "refreshToken": "jwt-refresh-token"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "accessToken": "new-jwt-access-token",
-    "refreshToken": "new-jwt-refresh-token",
-    "tokenType": "Bearer",
-    "expiresIn": 900
-  }
-}
-```
-
-### 7.3 用户注册
-
-```
-POST /api/v1/auth/register
-```
-
-**请求**：
-
-```json
-{
-  "username": "user@example.com",
-  "password": "encrypted-password",
-  "displayName": "用户名",
-  "verificationCode": "123456"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "userId": "user-uuid",
-    "username": "user@example.com",
-    "displayName": "用户名",
-    "role": "user",
-    "createdAt": "2026-07-11T10:00:00Z"
-  }
-}
-```
-
----
-
-## 8. 内部API接口（Java后端 ↔ Python AI服务）
-
-### 8.1 接口前缀
-
-所有内部API以 `/api/v1/ai/` 为前缀，仅在Kubernetes集群内网可访问。
-
-### 8.2 认证方式
-
-| 方式 | 说明 |
-|------|------|
-| 请求头 | `X-Internal-Token: {internal-token}` |
-| Token来源 | K8s Secret挂载的环境变量 |
-
-### 8.3 文件理解
-
-```
-POST /api/v1/ai/understand
-```
-
-**请求**：
-
-```json
-{
-  "fileId": "file-uuid",
-  "fileName": "document.pdf",
-  "filePath": "/storage/files/document.pdf",
-  "fileType": "pdf",
-  "fileSize": 1024000,
-  "content": "文件文本内容(解析后)",
-  "userId": "user-uuid"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "fileId": "file-uuid",
-    "fileType": "pdf",
-    "category": "财务报告",
-    "tags": ["报告", "财务"],
-    "keywords": ["营收", "利润", "成本"],
-    "summary": "文件摘要内容",
-    "sensitiveLevel": "normal",
-    "sensitiveItems": [],
-    "processingTime": 3500
-  }
-}
-```
-
-### 8.4 语义搜索
-
-```
-POST /api/v1/ai/search
-```
-
-**请求**：
-
-```json
-{
-  "query": "去年的销售数据",
-  "userId": "user-uuid",
-  "page": 1,
-  "pageSize": 10,
-  "filters": {
-    "category": "",
-    "tags": [],
-    "fileTypes": ["pdf", "docx"]
-  }
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "totalCount": 15,
-    "items": [
-      {
-        "fileId": "file-uuid",
-        "fileName": "销售数据分析.xlsx",
-        "relevance": 0.92,
-        "summary": "2024年度销售总额达到1.2亿元...",
-        "matchedChunks": [
-          {
-            "content": "2024年度销售总额达到1.2亿元...",
-            "score": 0.92
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### 8.5 文档问答
-
-```
-POST /api/v1/ai/qa
-```
-
-**请求**：
-
-```json
-{
-  "question": "去年的净利润是多少？",
-  "fileId": "file-uuid",
-  "userId": "user-uuid",
-  "stream": false
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "answer": "根据2024年度财务报告，公司去年的净利润为5.2亿元，同比增长18.3%。",
-    "sources": [
-      {
-        "fileId": "file-uuid",
-        "chunkContent": "2024年度净利润达到5.2亿元...",
-        "relevance": 0.95
-      }
-    ],
-    "tokenUsage": {
-      "promptTokens": 3892,
-      "completionTokens": 36,
-      "totalTokens": 3928
-    }
-  }
-}
-```
-
-### 8.6 内容生成
-
-```
-POST /api/v1/ai/generate
-```
-
-**请求**：
-
-```json
-{
-  "fileIds": ["file-uuid-1", "file-uuid-2"],
-  "generateType": "summary",
-  "params": {
-    "maxLength": 200,
-    "style": "concise"
-  },
-  "userId": "user-uuid"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "generateType": "summary",
-    "content": "生成的摘要/报告内容...",
-    "tokenUsage": {
-      "promptTokens": 5000,
-      "completionTokens": 200,
-      "totalTokens": 5200
-    },
-    "processingTime": 4500
-  }
-}
-```
-
-### 8.7 敏感检测
-
-```
-POST /api/v1/ai/security/detect
-```
-
-**请求**：
-
-```json
-{
-  "fileId": "file-uuid",
-  "content": "文件文本内容",
-  "userId": "user-uuid"
-}
-```
-
-**响应**：
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "sensitiveLevel": "high",
-    "sensitiveItems": [
-      {
-        "type": "id_card",
-        "content": "110101****1234",
-        "position": "第3页第2段",
-        "riskLevel": "high"
-      }
-    ]
-  }
-}
-```
-
----
-
-## 9. 实时通信接口（WebSocket/SSE）
-
-### 9.1 SSE（Server-Sent Events）接口
-
-SSE 用于 Java后端向客户端推送单向实时消息，适用于AI处理进度通知和流式问答响应。
-
-**连接端点**：
-
-```
-GET /api/v1/events/connect
-```
-
-**请求头**：
-
-| 头 | 值 | 说明 |
-|-----|-----|------|
-| Authorization | Bearer {jwt-token} | JWT认证Token |
-| Accept | text/event-stream | 声明SSE连接 |
-
-**事件格式**：
-
-```
-event: {eventType}
-data: {json数据}
-id: {eventId}
-retry: 3000
-```
-
-**事件类型定义**：
-
-| 事件类型 | 触发场景 | data格式 |
-|---------|---------|---------|
-| `file.processing` | 文件上传后AI开始处理 | `{"fileId":"uuid","status":"processing","progress":0}` |
-| `file.progress` | AI处理进度更新 | `{"fileId":"uuid","status":"processing","progress":45}` |
-| `file.completed` | AI处理完成 | `{"fileId":"uuid","status":"completed","aiResult":{...}}` |
-| `file.failed` | AI处理失败 | `{"fileId":"uuid","status":"failed","error":"原因"}` |
-| `qa.stream` | 流式问答响应 | `{"fileId":"uuid","chunk":"部分回答内容","done":false}` |
-| `qa.done` | 流式问答结束 | `{"fileId":"uuid","chunk":"","done":true}` |
-
-**连接管理**：
-- 客户端登录后建立SSE连接
-- 连接超时：30分钟无活动自动断开
-- 断线重连：客户端自动重连，服务端返回 `Last-Event-ID`
-
-### 9.2 WebSocket 接口（备用）
-
-当需要双向通信时（如协同编辑），使用WebSocket替代SSE。
-
-**连接端点**：
-
-```
-ws://api.nebulamind.com/ws
-```
-
-**认证方式**：连接时通过URL参数传递Token
-
-```
-ws://api.nebulamind.com/ws?token={jwt-token}
-```
-
-**消息格式**：
-
-```json
-{
-  "type": "messageType",
-  "payload": {},
-  "timestamp": "2026-07-11T10:00:00Z",
-  "messageId": "msg-uuid"
-}
-```
-
----
-
-## 10. Swagger/OpenAPI 规范
-
-### 10.1 规范说明
-
-API规范文档采用 **OpenAPI 3.0** 标准，通过以下方式集成到项目中：
-
-| 集成方式 | 说明 | 实现工具 |
-|---------|------|---------|
-| 代码注解 | 使用注解在Controller中定义API信息 | springdoc-openapi |
-| 自动文档 | 启动项目后自动生成OpenAPI JSON | springdoc-openapi-ui |
-| 交互式测试 | 提供Swagger UI页面在线调试 | Swagger UI |
-
-### 10.2 springdoc-openapi 配置
-
-**Maven依赖**：
-
-```xml
-<dependency>
-    <groupId>org.springdoc</groupId>
-    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-    <version>2.3.0</version>
-</dependency>
-```
-
-**Java配置**：
-
-```java
-@Configuration
-public class OpenApiConfig {
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-            .info(new Info()
-                .title("云盘智能体 API")
-                .version("v1.0")
-                .description("云盘智能体应用后端API接口文档"))
-            .addSecurityItem(new SecurityRequirement()
-                .addList("bearerAuth"))
-            .components(new Components()
-                .addSecuritySchemes("bearerAuth",
-                    new SecurityScheme()
-                        .type(SecurityScheme.Type.HTTP)
-                        .scheme("bearer")
-                        .bearerFormat("JWT")));
-    }
-}
-```
-
-### 10.3 访问方式
-
-| 环境 | Swagger UI 地址 | OpenAPI JSON 地址 |
-|------|----------------|-------------------|
-| 开发环境 | http://localhost:8080/swagger-ui.html | http://localhost:8080/v3/api-docs |
-| 测试环境 | https://test-api.nebulamind.com/swagger-ui.html | https://test-api.nebulamind.com/v3/api-docs |
-| 生产环境 | 不对外开放（内网访问） | 不对外开放 |
-
-### 10.4 注解规范
-
-| 场景 | 注解 | 示例 |
+| 方法 | 路径 | 说明 |
 |------|------|------|
-| 接口描述 | @Operation | `@Operation(summary = "上传文件", description = "支持分片上传")` |
-| 参数描述 | @Parameter | `@Parameter(description = "文件ID", required = true)` |
-| 响应描述 | @ApiResponse | `@ApiResponse(responseCode = "200", description = "上传成功")` |
-| 数据模型 | @Schema | `@Schema(description = "文件实体")` |
+| POST | `/api/v1/security/detect` | 敏感信息两级检测，高风险可自动加密 |
+| POST | `/api/v1/security/encrypt` | 文件加密（服务端 AES-256-GCM 或标记端到端加密） |
+| POST | `/api/v1/security/decrypt` | 文件解密 |
+| GET | `/api/v1/e2ee/key` | 获取当前用户端到端密钥 blob |
+| PUT | `/api/v1/e2ee/key` | 保存当前用户端到端密钥 blob |
 
----
-
-## 11. 日志系统设计
-
-### 11.1 日志架构
-
-```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  应用日志     │    │  AI调用日志   │    │  安全审计日志  │
-│  (业务操作)   │    │  (模型调用)   │    │  (敏感操作)   │
-└──────┬───────┘    └──────┬───────┘    └──────┬───────┘
-       │                   │                   │
-       ▼                   ▼                   ▼
-┌─────────────────────────────────────────────────────┐
-│                  日志存储层                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐│
-│  │  控制台输出   │  │  文件滚动     │  │  数据库存储   ││
-│  │  (开发环境)   │  │  (生产环境)   │  │  (AI调用/审计) ││
-│  └──────────────┘  └──────────────┘  └──────────────┘│
-└─────────────────────────────────────────────────────┘
-```
-
-### 11.2 日志分类
-
-| 日志类型 | 输出目标 | 保留周期 | 包含内容 |
-|---------|---------|---------|---------|
-| **应用日志** | 控制台 + 文件 | 30天 | 请求、响应、业务处理、异常堆栈 |
-| **AI调用日志** | 文件 + 数据库 | 90天 | 模型、Token用量、延迟、成功/失败 |
-| **安全审计日志** | 数据库 | 180天 | 敏感操作、登录、权限变更、文件删除 |
-
-### 11.3 日志级别配置
-
-| 环境 | 根日志级别 | Spring框架 | 业务代码 |
-|------|-----------|-----------|---------|
-| 开发(dev) | INFO | INFO | DEBUG |
-| 测试(test) | INFO | WARN | INFO |
-| 生产(prod) | WARN | WARN | INFO |
-
-### 11.4 日志框架配置
-
-**技术栈**：SLF4J + Logback
-
-**logback-spring.xml 关键配置**：
-
-```xml
-<!-- 控制台输出 -->
-<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder>
-        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-    </encoder>
-</appender>
-
-<!-- 文件滚动输出 -->
-<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>logs/nebulamind.log</file>
-    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-        <fileNamePattern>logs/nebulamind.%d{yyyy-MM-dd}.log</fileNamePattern>
-        <maxHistory>30</maxHistory>
-    </rollingPolicy>
-    <encoder>
-        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-    </encoder>
-</appender>
-```
-
----
-
-## 12. 错误处理
-
-### 12.1 全局异常处理
-
-| 异常类型 | HTTP状态码 | 错误码 | 说明 |
-|---------|-----------|--------|------|
-| MethodArgumentNotValidException | 400 | 400 | 参数校验失败 |
-| BindException | 400 | 400 | 参数绑定失败 |
-| MissingServletRequestParameterException | 400 | 400 | 缺少必填参数 |
-| AuthenticationException | 401 | 401 | 认证失败 |
-| AccessDeniedException | 403 | 403 | 权限不足 |
-| NoSuchElementException | 404 | 404 | 资源不存在 |
-| FileNotFoundException | 404 | 404 | 文件不存在 |
-| FileSizeLimitExceededException | 413 | 413 | 文件大小超限 |
-| TooManyRequestsException | 429 | 429 | 请求频率过高 |
-| RuntimeException | 500 | 500 | 服务器内部错误 |
-| AiServiceException | 502 | 502 | AI服务调用失败 |
-| TimeoutException | 503 | 503 | 服务超时 |
-
-### 12.2 错误响应示例
+`POST /api/v1/security/detect`
 
 ```json
 {
-  "code": 400,
-  "message": "参数校验失败",
-  "data": {
-    "errors": [
-      {
-        "field": "fileName",
-        "message": "文件名不能为空"
-      },
-      {
-        "field": "fileSize",
-        "message": "文件大小不能超过100MB"
-      }
-    ]
-  },
-  "requestId": "req-uuid",
-  "timestamp": "2026-07-11T10:00:00Z"
+  "fileId": "uuid",
+  "useLlm": true,
+  "autoEncrypt": true
 }
 ```
 
+响应：
+
+```json
+{
+  "fileId": "uuid",
+  "sensitiveLevel": "high",
+  "sensitiveItems": [
+    {
+      "type": "id_card",
+      "typeName": "身份证号",
+      "content": "110101****1234",
+      "position": 0,
+      "riskLevel": "high",
+      "source": "regex"
+    }
+  ],
+  "scannedAt": "2026-08-12T10:00:00",
+  "detectionMethod": "regex+ai",
+  "autoEncrypted": true,
+  "encryptionAlgorithm": "AES-256-GCM",
+  "message": "文件包含高风险敏感信息，已自动加密存储"
+}
+```
+
+检测策略：本地正则（身份证/手机号/银行卡/邮箱）+ LLM NER + 图片 OCR 兜底，检测结果会写回文件 `sensitiveLevel`。
+
+`POST /api/v1/security/encrypt` body：`{"fileId": "...", "reason": "...", "clientEncrypted": false}`。
+`POST /api/v1/security/decrypt` body：`{"fileId": "...", "clientDecrypted": false}`。
+
+服务端加密使用每文件独立密钥，密钥用当前用户的密钥包装后保存；解密后明文写回存储并清除密钥引用。已加密文件不可重复加密。
+
 ---
 
-## 13. 附录
+## 8. 云存储对接
 
-### 13.1 API版本管理
+### 8.1 配置管理
 
-| 版本 | 状态 | 说明 |
+| 方法 | 路径 | 说明 |
 |------|------|------|
-| v1 | 当前版本 | 初始版本，稳定后将冻结 |
+| GET | `/api/v1/storage-config` | 当前用户的云存储配置列表 |
+| POST | `/api/v1/storage-config` | 新建配置（S3 / WebDAV） |
+| PUT | `/api/v1/storage-config/{id}` | 更新配置 |
+| DELETE | `/api/v1/storage-config/{id}` | 删除配置 |
+| POST | `/api/v1/storage-config/{id}/test` | 测试连接 |
 
-### 13.2 接口变更流程
+配置字段包括：`name/providerType/endpointUrl/accessKey/secretKey/bucketName/region/isActive/extraConfig`。
 
-1. 提交API变更提案（含变更内容、理由、兼容性分析）
-2. 团队评审确认
-3. 更新API规范文档
-4. 实现变更
-5. 通知前端/测试团队
+测试连接返回：
 
-### 13.3 相关文档
+```json
+{
+  "success": true,
+  "message": "连接成功",
+  "testedAt": "2026-08-12T10:00:00"
+}
+```
 
-| 文档 | 说明 |
-|------|------|
-| [系统架构设计文档.md](系统架构设计文档.md) | 系统架构整体设计 |
-| [双服务架构方案.md](双服务架构方案.md) | 双服务架构详细设计 |
-| [技术选型文档.md](技术选型文档.md) | 技术选型详细分析 |
+### 8.2 远端文件操作
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/storage-config/{configId}/drive/files?path=/` | 浏览远端文件 |
+| GET | `/api/v1/storage-config/{configId}/drive/download?path=/a.pdf` | 下载远端文件 |
+| POST | `/api/v1/storage-config/{configId}/drive/files/upload` | 上传文件到远端，multipart `file`、可选 `path`、`name` |
+| DELETE | `/api/v1/storage-config/{configId}/drive/files?path=/a.pdf` | 删除远端文件 |
+| POST | `/api/v1/storage-config/{configId}/drive/files/import?path=/a.pdf` | 导入远端文件到 NebulaMind |
+
+---
+
+## 9. 审计与管理接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/admin/audit/user/{userId}` | 按用户查询审计日志 |
+| GET | `/api/v1/admin/audit/action/{action}` | 按操作类型查询 |
+| GET | `/api/v1/admin/audit/resource/{resourceType}` | 按资源类型查询 |
+| GET | `/api/v1/admin/audit/timerange` | 按时间范围查询 |
+| GET | `/api/v1/admin/audit/recent` | 最近日志 |
+| GET | `/api/v1/admin/audit/alerts/summary` | 告警汇总 |
+| GET | `/api/v1/admin/audit/export` | 导出日志 |
+
+以上接口需要 `ADMIN` 角色。
+
+---
+
+## 10. 健康检查
+
+```text
+GET /api/v1/public/health
+GET /api/v1/public/info
+```
+
+无需认证，用于探活与服务信息展示。
+
+---
+
+## 11. 实时通信（SSE）
+
+| 方法 | 路径 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/sse/subscribe/{userId}` | 否 | 按用户 ID 订阅，前端当前使用 |
+| GET | `/api/v1/events/connect` | 是 | 认证后自动按当前用户订阅 |
+
+响应类型：`text/event-stream`，连接超时 5 分钟。
+
+事件类型：
+
+| 事件 | 数据 | 说明 |
+|------|------|------|
+| `connected` | `{"message": "...", "userId": "..."}` | 连接建立 |
+| `progress` | `{"fileId": "...", "progress": 45, "message": "...", "timestamp": 123}` | 处理进度 |
+| `task` | `{"taskId": "...", "status": "...", "message": "...", "timestamp": 123}` | 任务状态 |
+
+---
+
+## 12. WebDAV / S3 兼容接口
+
+### 12.1 WebDAV
+
+基础路径 `/webdav/**`，实现 `GET/HEAD/PUT/DELETE`，可作为 WebDAV 客户端挂载路径。
+
+### 12.2 S3 兼容
+
+基础路径 `/s3/**`：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/s3/{bucket}/objects` | 对象列表 |
+| GET | `/s3/{bucket}/objects/{fileId}` | 下载对象 |
+| HEAD | `/s3/{bucket}/objects/{fileId}` | 元数据查询 |
+| PUT | `/s3/{bucket}/objects/{fileId}` | 上传对象 |
+| DELETE | `/s3/{bucket}/objects/{fileId}` | 删除对象 |
+
+---
+
+## 13. AI 服务内部接口（FastAPI）
+
+Java 后端通过 `http://localhost:8081` 调用，请求头必须携带 `X-API-Key`。核心端点共 11 个：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/classify` | 文件分类与标签 |
+| POST | `/api/v1/search` | 语义搜索 |
+| POST | `/api/v1/qa` | 单文档问答 |
+| POST | `/api/v1/qa/cross` | 跨文档问答 |
+| POST | `/api/v1/generate/summary` | 摘要生成 |
+| POST | `/api/v1/generate/extract` | 内容提炼 |
+| POST | `/api/v1/generate/report` | 报告生成 |
+| POST | `/api/v1/generate/ppt` | PPT 大纲生成 |
+| POST | `/api/v1/generate/convert` | 格式转换 |
+| POST | `/api/v1/sensitive/detect` | 敏感检测 |
+| POST | `/api/v1/sensitive/mask` | 敏感脱敏 |
+
+辅助端点：`GET /health`、`GET /api/v1/stats`、`GET /api/v1/logs/export`、`GET /api/v1/prompts`。
+
+AI 服务响应模型：
+
+- 分类：`{file_id, category, tags, sensitive_level, confidence}`
+- 搜索：`{query, results: [{file_id, file_name, snippet, score, category}]}`
+- 问答：`{question, answer, source_file_id, source_snippets, confidence}`
+- 生成：`{file_id, content, key_points, format}`
+- 敏感检测：`{file_id, sensitive_level, level_score, summary, detection_method, warning, matches, masked_content}`
+
+AI 服务内部会对 MaaS 接口限流（每分钟 5 次）做降级处理，敏感检测结果缓存 10 分钟以减少重复调用。
+
+---
+
+## 14. 错误码
+
+| HTTP 状态 | 场景 | 说明 |
+|-----------|------|------|
+| 400 | 参数校验失败、非法参数、重复加密等 | `MethodArgumentNotValidException`、`IllegalArgumentException` |
+| 401 | 未认证或密码错误 | `BadCredentialsException`、`AuthenticationException` |
+| 403 | 无权限 | 非本人资源、非管理员访问管理接口 |
+| 404 | 资源不存在 | `ResourceNotFoundException` |
+| 429 | 触发 Sentinel 限流 | 返回 `Rate limit exceeded, please try again later` |
+| 500 | 服务器内部错误 | 通用异常兜底 |
+
+---
+
+## 15. 附录：接口与代码对应
+
+| 模块 | 主要代码 |
+|------|---------|
+| 认证 | `backend/src/main/java/com/nebulamind/controller/AuthController.java` |
+| 文件 | `backend/src/main/java/com/nebulamind/controller/FileController.java` |
+| 版本 | `backend/src/main/java/com/nebulamind/controller/FileVersionController.java` |
+| 搜索/问答 | `SearchController.java`、`QAController.java` |
+| 生成 | `GenerateController.java` |
+| 安全 | `SecurityController.java`、`E2eeController.java` |
+| 云存储 | `CloudStorageConfigController.java`、`CloudStorageDriveController.java` |
+| SSE | `sse/SseController.java`、`controller/SseEventController.java` |
+| AI 服务 | `ai-services/app/api/*.py` |

@@ -223,4 +223,4 @@ MaaS 平台**未提供独立 Rerank 端点**（所有 BGE-reranker 系列模型�
 **评估日期**: 2026-07-14  
 **评估人**: NebulaMind 项目组  
 **文档版本**: v1.0  
-**相关脚本**: [final_complete_test.py](file:///c:/projects/NebulaMind2/NebulaMind/backend/api-test/final_complete_test.py)
+**相关脚本**: [final_complete_test.py](../../backend/api-test/final_complete_test.py)

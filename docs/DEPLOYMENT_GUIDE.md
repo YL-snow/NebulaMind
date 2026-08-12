@@ -32,7 +32,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      前端 (React + TypeScript)              │
-│   [Home] [Search] [Generate] [Security] [FileDetail]      │
+│   [Home] [FileDetail] [Generate] [Security] [StorageConfig]      │
 └────────────────────────────┬────────────────────────────────┘
                              │ HTTP/HTTPS
 ┌────────────────────────────▼────────────────────────────────┐
@@ -71,7 +71,8 @@
 |------|------|------|
 | **前端** | React | 19.x |
 | | TypeScript | 5.x |
-| | Ant Design | 5.x |
+| | Tailwind CSS | 3.x |
+| | lucide-react | 1.x |
 | | Vite | 6.x |
 | **后端** | Spring Boot | 3.2.x |
 | | Java | 21 |
@@ -122,7 +123,7 @@ NebulaMind/
 │   └── requirements.txt        # Python依赖
 ├── docker-compose.yml          # 基础服务编排
 ├── docker-compose.prod.yml     # 生产环境编排（含所有服务）
-├── deploy-to-ecs.sh            # ECS部署脚本
+├── deploy/                    # ECS部署脚本
 └── .env.example                # 环境变量示例
 ```
 
@@ -134,32 +135,32 @@ NebulaMind/
 
 | 功能 | 文件 | 状态 |
 |------|------|------|
-| 用户认证（JWT） | [AuthController.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/controller/AuthController.java) | ✅ |
-| 文件上传/下载 | [FileController.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/controller/FileController.java) | ✅ |
-| 文件分类 | [AIController.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/controller/AIController.java) | ✅ |
-| 重复文件检测 | [FileService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/FileService.java) | ✅ |
-| 语义搜索 | [SearchController.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/controller/SearchController.java) | ✅ |
-| 文档问答 | [QAController.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/controller/QAController.java) | ✅ |
-| 内容生成 | [GenerateController.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/controller/GenerateController.java) | ✅ |
-| 敏感检测 | [SecurityController.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/controller/SecurityController.java) | ✅ |
-| 文件加密 | [EncryptionService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/EncryptionService.java) | ✅ |
-| 版本管理 | [FileVersionService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/FileVersionService.java) | ✅ |
-| MinIO存储 | [MinIOService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/MinIOService.java) | ✅ |
-| 存储服务抽象 | [StorageService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/StorageService.java) | ✅ |
-| S3/WebDAV 云盘对接 | [CloudStorageDriveService.java](file:///c:/projects/NebulaMind/backend/src/main/java/com/nebulamind/cloud/CloudStorageDriveService.java) | ✅ |
+| 用户认证（JWT） | [AuthController.java](backend/src/main/java/com/nebulamind/controller/AuthController.java) | ✅ |
+| 文件上传/下载 | [FileController.java](backend/src/main/java/com/nebulamind/controller/FileController.java) | ✅ |
+| 文件分类 | [AIController.java](backend/src/main/java/com/nebulamind/controller/AIController.java) | ✅ |
+| 重复文件检测 | [FileService.java](backend/src/main/java/com/nebulamind/service/FileService.java) | ✅ |
+| 语义搜索 | [SearchController.java](backend/src/main/java/com/nebulamind/controller/SearchController.java) | ✅ |
+| 文档问答 | [QAController.java](backend/src/main/java/com/nebulamind/controller/QAController.java) | ✅ |
+| 内容生成 | [GenerateController.java](backend/src/main/java/com/nebulamind/controller/GenerateController.java) | ✅ |
+| 敏感检测 | [SecurityController.java](backend/src/main/java/com/nebulamind/controller/SecurityController.java) | ✅ |
+| 文件加密 | [EncryptionService.java](backend/src/main/java/com/nebulamind/service/EncryptionService.java) | ✅ |
+| 版本管理 | [FileVersionService.java](backend/src/main/java/com/nebulamind/service/FileVersionService.java) | ✅ |
+| MinIO存储 | [MinIOService.java](backend/src/main/java/com/nebulamind/service/MinIOService.java) | ✅ |
+| 存储服务抽象 | [StorageService.java](backend/src/main/java/com/nebulamind/service/StorageService.java) | ✅ |
+| S3/WebDAV 云盘对接 | [CloudStorageDriveService.java](backend/src/main/java/com/nebulamind/cloud/CloudStorageDriveService.java) | ✅ |
 
 ### 4.2 前端功能
 
 | 功能 | 文件 | 状态 |
 |------|------|------|
-| 用户登录 | [Login.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/pages/Login.tsx) | ✅ |
-| 文件管理首页 | [Home.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/pages/Home.tsx) | ✅ |
-| 文件详情 | [FileDetail.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/pages/FileDetail.tsx) | ✅ |
-| 语义搜索 | [Search.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/pages/Search.tsx) | ✅ |
-| 内容生成 | [Generate.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/pages/Generate.tsx) | ✅ |
-| 安全管理 | [Security.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/pages/Security.tsx) | ✅ |
-| 文件上传组件 | [Uploader.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/components/business/Uploader.tsx) | ✅ |
-| 文件卡片组件 | [FileCard.tsx](file:///c:/projects/NebulaMind2/NebulaMind/frontend/src/components/business/FileCard.tsx) | ✅ |
+| 用户登录 | [Login.tsx](frontend/src/pages/Login.tsx) | ✅ |
+| 文件管理首页 | [Home.tsx](frontend/src/pages/Home.tsx) | ✅ |
+| 文件详情 | [FileDetail.tsx](frontend/src/pages/FileDetail.tsx) | ✅ |
+| 存储配置 | [StorageConfig.tsx](frontend/src/pages/StorageConfig.tsx) | ✅ |
+| 内容生成 | [Generate.tsx](frontend/src/pages/Generate.tsx) | ✅ |
+| 安全管理 | [Security.tsx](frontend/src/pages/Security.tsx) | ✅ |
+| 文件上传组件 | [Uploader.tsx](frontend/src/components/business/Uploader.tsx) | ✅ |
+| 文件卡片组件 | [FileCard.tsx](frontend/src/components/business/FileCard.tsx) | ✅ |
 
 ### 4.3 容器化部署
 
@@ -169,7 +170,7 @@ NebulaMind/
 | Dockerfile (前端) | ✅ 已创建 |
 | Dockerfile (AI服务) | ✅ 已创建 |
 | docker-compose.prod.yml | ✅ 已创建 |
-| 预构建镜像 tar | ✅ 已生成 |
+| 生产部署 | 待执行（仓库不提交 tar 包） |
 | ECS部署脚本 | ✅ 已创建 |
 
 ---
@@ -180,10 +181,8 @@ NebulaMind/
 
 | 优先级 | 功能 | 描述 | 涉及文件 |
 |--------|------|------|----------|
-| 🔴 高 | 用户注册 | 前端注册页面 + 后端注册API | `frontend/src/pages/Register.tsx`, `AuthController.java` |
-| 🔴 高 | 文件分享 | 分享链接生成、权限设置、分享管理 | `frontend/src/pages/Share.tsx`, `ShareController.java` |
-| 🔴 高 | 协作编辑 | 编辑痕迹追踪、多人协作 | `CollabController.java`, `FileVersionService.java` |
-| 🟡 中 | 实时通知 | SSE实时推送文件处理进度 | `SseController.java`, `frontend/src/hooks/useSSE.ts` |
+| 🔴 高 | 文件分享 | 分享链接生成、权限设置、分享管理 | 待开发 |
+| 🟡 中 | 多人协作 | 编辑痕迹追踪已实现，多人实时协作规划中 | `FileVersionController.java`, `FileVersionService.java` |
 | 🟡 中 | 邮件通知 | 敏感文件告警、分享通知 | `EmailService.java` |
 | 🟢 低 | 移动端适配 | 响应式布局优化 | 前端全局CSS |
 
@@ -223,8 +222,8 @@ NebulaMind/
 ### 6.2 ECS服务器信息
 
 ```
-主机名: iZbp1gjjojhy45za3fij4cZ
-公网IP: 121.41.224.122
+主机名: iZ...（示例，按实际环境替换）
+公网IP: <ECS_SERVER_IP>
 区域: 华东1（杭州）
 操作系统: Ubuntu 22.04 64位
 ```
@@ -235,16 +234,16 @@ NebulaMind/
 
 ```bash
 # 1. 登录ECS
-ssh root@121.41.224.122
+ssh root@<ECS_SERVER_IP>
 
 # 2. 创建项目目录
 mkdir -p /opt/nebulamind/{backend,frontend,ai-services,docs/database,images}
 
 # 3. 从本地上传项目源代码和配置文件到ECS（在本地执行）
-scp -r backend frontend ai-services docker-compose.prod.yml docs/database/DDL脚本.sql docs/database/seed_data.sql root@121.41.224.122:/opt/nebulamind/
+scp -r backend frontend ai-services docker-compose.prod.yml docs/database/DDL脚本.sql docs/database/seed_data.sql root@<ECS_SERVER_IP>:/opt/nebulamind/
 
 # 4. 在ECS上构建Docker镜像
-ssh root@121.41.224.122
+ssh root@<ECS_SERVER_IP>
 
 cd /opt/nebulamind
 
@@ -304,7 +303,7 @@ docker compose -f docker-compose.prod.yml up -d
 | RabbitMQ | 5672 | 消息队列 |
 | RabbitMQ管理 | 15672 | Web管理界面 |
 | MinIO | 9000 | 对象存储API |
-| MinIO控制台 | 9091 | Web管理界面 |
+| MinIO控制台 | 9001 | Web管理界面 |
 | Milvus | 19530 | 向量数据库 |
 
 ---
@@ -387,27 +386,27 @@ RABBITMQ_PASSWORD=guest
 
 ```bash
 # 登录
-curl -X POST http://121.41.224.122/api/v1/auth/login \
+curl -X POST http://<ECS_SERVER_IP>/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"123456"}'
+  -d '{"email":"admin@nebulamind.com","password":"your-password"}'
 
 # 上传文件
-curl -X POST http://121.41.224.122/api/v1/files/upload \
+curl -X POST http://<ECS_SERVER_IP>/api/v1/files/upload \
   -H "Authorization: Bearer <token>" \
   -F "file=@test.pdf"
 
 # 获取文件列表
-curl -X GET http://121.41.224.122/api/v1/files \
+curl -X GET http://<ECS_SERVER_IP>/api/v1/files \
   -H "Authorization: Bearer <token>"
 
 # 语义搜索
-curl -X POST http://121.41.224.122/api/v1/search \
+curl -X POST http://<ECS_SERVER_IP>/api/v1/search \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"query":"项目进度"}'
 
 # 文档问答
-curl -X POST http://121.41.224.122/api/v1/qa \
+curl -X POST http://<ECS_SERVER_IP>/api/v1/qa \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"question":"文档中提到的关键技术是什么？","fileId":"<file-id>"}'

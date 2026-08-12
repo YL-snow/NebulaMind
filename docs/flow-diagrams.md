@@ -51,36 +51,36 @@ sequenceDiagram
 
 ## 3. 文件处理状态机
 
-文件上传与解析状态：
+文件上传状态（FileStatus）：
 
 ```mermaid
 stateDiagram-v2
-    [*] --> UPLOADING: 开始上传
-    UPLOADING --> PROCESSING: 上传完成
-    PROCESSING --> COMPLETED: 解析完成
-    PROCESSING --> FAILED: 处理失败
-    COMPLETED --> PROCESSING: 上传新版本后重新处理
-    FAILED --> COMPLETED: 重试成功
+    [*] --> COMPLETED: 普通上传完成后直接完成
+    COMPLETED --> COMPLETED: 上传新版本
+    COMPLETED --> [*]: 删除文件
 ```
 
-AI 处理状态：
+说明：当前主流程上传成功后即保存为 `COMPLETED`；`UPLOADING / PROCESSING / FAILED` 为枚举预留，前端分片上传接入后可再细化。
+
+AI 处理状态（AiStatus）：
 
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: 新文件或新版本
-    PENDING --> PROCESSING: 生成摘要 / 问答
-    PROCESSING --> COMPLETED: 成功并保存结果
-    PROCESSING --> FAILED: 失败或限流
+    PENDING --> COMPLETED: AI 处理成功（回调或摘要生成）
+    PENDING --> FAILED: 处理失败或限流
     COMPLETED --> PENDING: 上传新版本后重新生成
-    FAILED --> PROCESSING: 用户重试
+    FAILED --> PENDING: 用户重试
 ```
+
+说明：`PROCESSING` 为枚举预留；当前 AI 服务通过回调直接返回 `COMPLETED / FAILED`。
 
 ## 4. 用户交互流程
 
 ```mermaid
 flowchart TD
     A[登录 / 注册] --> B[文件概览]
-    B -->|上传文件| C[上传 / 分片上传]
+    B -->|上传文件| C[普通上传]
     C --> D[文件卡片与类型识别]
     B --> E[文件详情]
     E --> F[AI 摘要]
@@ -91,4 +91,4 @@ flowchart TD
     B --> K[云存储配置]
 ```
 
-核心页面：文件概览、文件详情、内容生成、安全管理、云存储配置。用户上传文件后可进入文件详情完成摘要、问答、版本管理和安全操作。
+核心页面：登录、文件概览、文件详情、内容生成、安全管理、云存储配置。用户上传文件后可进入文件详情完成摘要、问答、版本管理和安全操作。

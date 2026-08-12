@@ -53,7 +53,7 @@
 
 | 功能 | 描述 |
 |------|------|
-| 文件上传/下载 | 支持分片上传、断点续传、重复检测 |
+| 文件上传/下载 | 支持普通文件上传/下载、重复检测；后端已实现分片接口，前端待接入 |
 | 文件版本管理 | 版本历史追踪、版本 diff 对比 |
 | 智能分类 | AI 自动分类与标签生成 |
 | 多存储后端 | 支持 MinIO/S3 对象存储、WebDAV 云盘、本地存储 |
@@ -74,7 +74,7 @@
 | 敏感内容检测 | 两级检测（正则快速过滤 + LLM 深度分析） |
 | 文件加密 | 高风险文件自动 AES-256-GCM 加密 |
 | 端到端加密 | 浏览器本地 AES-256-GCM 加密，每个文件独立密钥，密钥仅显示一次 |
-| 权限管理 | 基于角色的访问控制、权限推荐 |
+| 权限管理 | 基于角色的访问控制（管理员/普通用户） |
 
 ### 平台特性
 
@@ -102,7 +102,7 @@
 | 后端 | Spring Data JPA | - | ORM |
 | AI 服务 | Python FastAPI | - | AI 推理层 |
 | AI 服务 | LangChain / RAG | - | 文档问答 |
-| 数据库 | PostgreSQL | 16 | 关系型数据库 |
+| 数据库 | PostgreSQL | 15 | 关系型数据库 |
 | 缓存 | Redis | 7.x | 缓存与会话 |
 | 消息队列 | RabbitMQ | 3.x | 异步任务 |
 | 对象存储 | MinIO (S3 兼容) | - | 文件存储 |
@@ -122,14 +122,14 @@ flowchart TB
     end
 
     subgraph Frontend["前端 React 19"]
-        Pages[7 个功能页面]
+        Pages[6 个功能页面]
         Components[通用组件库]
         Stores[Zustand 状态管理]
         API[API 调用层]
     end
 
     subgraph Backend["后端 Spring Boot 3.2"]
-        Controllers[12 个 Controller]
+        Controllers[17 个 Controller]
         Services[业务服务层]
         Security[JWT + Spring Security]
         Repositories[JPA Repository]
@@ -205,7 +205,7 @@ flowchart TB
 |------|------|---------|
 | 后端框架 | Spring Boot 3 vs FastAPI 单体 | 业务服务用 Java 21 + Spring Boot 保证工程化与生态成熟度；AI 推理用 Python FastAPI 发挥 LLM 生态优势，双服务解耦 |
 | AI 服务框架 | FastAPI vs Flask | FastAPI 原生支持异步、Pydantic 数据校验与 OpenAPI 文档，适合 AI 流式接口 |
-| 数据库 | PostgreSQL 16 vs MySQL | 项目涉及全文检索与 JSON 字段，PostgreSQL 对复杂查询与扩展支持更好 |
+| 数据库 | PostgreSQL 15 vs MySQL | 项目涉及全文检索与 JSON 字段，PostgreSQL 对复杂查询与扩展支持更好 |
 | 向量数据库 | Milvus vs FAISS 文件索引 | 团队级共享检索需要独立向量库，Milvus 支持水平扩展与元数据过滤 |
 | 对象存储 | MinIO (S3) vs 本地磁盘 | 本地开发与生产统一走 S3 协议，MinIO 与主流 S3/WebDAV 云存储兼容 |
 | 认证方式 | JWT + Refresh Token vs Session | 前后端分离 + 多服务架构下无状态认证更易扩展 |
@@ -290,8 +290,8 @@ mvn spring-boot:run
 
 # 3. 启动前端（新终端）
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 
 # 4. 启动 AI 服务
 cd ai-services
@@ -303,7 +303,7 @@ python main.py
 
 | 角色 | 用户名 | 密码 |
 |------|--------|------|
-| 管理员 | admin | your-password |
+| 管理员 | admin@nebulamind.com | your-password |
 | 普通用户 | 注册后使用 | - |
 
 ---
@@ -313,19 +313,19 @@ python main.py
 ```
 NebulaMind/
 ├── backend/                     # Spring Boot 后端服务
-│   ├── src/main/java/           # Java 源码（12 个 Controller, 124 个 Java 文件）
+│   ├── src/main/java/           # Java 源码（17 个 Controller, 117 个 Java 文件）
 │   ├── src/main/resources/      # 配置文件
 │   └── src/test/java/           # 测试代码（7 个 JUnit 测试类）
 ├── frontend/                    # React 前端应用
 │   └── src/
-│       ├── pages/               # 7 个功能页面
+│       ├── pages/               # 6 个功能页面
 │       ├── components/          # 通用与业务组件
 │       ├── api/                 # API 调用封装
 │       ├── stores/              # Zustand 状态管理
 │       └── hooks/               # React 自定义 Hooks
 ├── ai-services/                 # Python AI 推理服务
 │   └── app/
-│       ├── api/                 # 6 个 AI API 端点
+│       ├── api/                 # 11 个 AI API 端点
 │       ├── services/            # 核心 AI 服务
 │       ├── core/                # LLM 客户端封装
 │       └── workers/             # 异步文件处理器
@@ -361,7 +361,7 @@ NebulaMind/
 
 | 优先级 | 功能 | 状态 |
 |--------|------|------|
-| 🔴 高 | 前端注册页面、文件分享链接 | 待开发 |
+| 🔴 高 | 文件分享链接 | 待开发 |
 | 🔴 高 | 大文件分片上传（前端支持） | 待开发 |
 | 🟡 中 | 移动端适配 | 待开发 |
 | 🟡 中 | CI/CD 流水线（GitHub Actions） | 待开发 |
