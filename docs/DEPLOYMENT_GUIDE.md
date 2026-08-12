@@ -135,32 +135,32 @@ NebulaMind/
 
 | 功能 | 文件 | 状态 |
 |------|------|------|
-| 用户认证（JWT） | [AuthController.java](backend/src/main/java/com/nebulamind/controller/AuthController.java) | ✅ |
-| 文件上传/下载 | [FileController.java](backend/src/main/java/com/nebulamind/controller/FileController.java) | ✅ |
-| 文件分类 | [AIController.java](backend/src/main/java/com/nebulamind/controller/AIController.java) | ✅ |
-| 重复文件检测 | [FileService.java](backend/src/main/java/com/nebulamind/service/FileService.java) | ✅ |
-| 语义搜索 | [SearchController.java](backend/src/main/java/com/nebulamind/controller/SearchController.java) | ✅ |
-| 文档问答 | [QAController.java](backend/src/main/java/com/nebulamind/controller/QAController.java) | ✅ |
-| 内容生成 | [GenerateController.java](backend/src/main/java/com/nebulamind/controller/GenerateController.java) | ✅ |
-| 敏感检测 | [SecurityController.java](backend/src/main/java/com/nebulamind/controller/SecurityController.java) | ✅ |
-| 文件加密 | [EncryptionService.java](backend/src/main/java/com/nebulamind/service/EncryptionService.java) | ✅ |
-| 版本管理 | [FileVersionService.java](backend/src/main/java/com/nebulamind/service/FileVersionService.java) | ✅ |
-| MinIO存储 | [MinIOService.java](backend/src/main/java/com/nebulamind/service/MinIOService.java) | ✅ |
-| 存储服务抽象 | [StorageService.java](backend/src/main/java/com/nebulamind/service/StorageService.java) | ✅ |
-| S3/WebDAV 云盘对接 | [CloudStorageDriveService.java](backend/src/main/java/com/nebulamind/cloud/CloudStorageDriveService.java) | ✅ |
+| 用户认证（JWT） | [AuthController.java](../backend/src/main/java/com/nebulamind/controller/AuthController.java) | ✅ |
+| 文件上传/下载 | [FileController.java](../backend/src/main/java/com/nebulamind/controller/FileController.java) | ✅ |
+| 文件分类 | [AIController.java](../backend/src/main/java/com/nebulamind/controller/AIController.java) | ✅ |
+| 重复文件检测 | [FileService.java](../backend/src/main/java/com/nebulamind/service/FileService.java) | ✅ |
+| 语义搜索 | [SearchController.java](../backend/src/main/java/com/nebulamind/controller/SearchController.java) | ✅ |
+| 文档问答 | [QAController.java](../backend/src/main/java/com/nebulamind/controller/QAController.java) | ✅ |
+| 内容生成 | [GenerateController.java](../backend/src/main/java/com/nebulamind/controller/GenerateController.java) | ✅ |
+| 敏感检测 | [SecurityController.java](../backend/src/main/java/com/nebulamind/controller/SecurityController.java) | ✅ |
+| 文件加密 | [EncryptionService.java](../backend/src/main/java/com/nebulamind/service/EncryptionService.java) | ✅ |
+| 版本管理 | [FileVersionService.java](../backend/src/main/java/com/nebulamind/service/FileVersionService.java) | ✅ |
+| MinIO存储 | [MinIOService.java](../backend/src/main/java/com/nebulamind/service/MinIOService.java) | ✅ |
+| 存储服务抽象 | [StorageService.java](../backend/src/main/java/com/nebulamind/service/StorageService.java) | ✅ |
+| S3/WebDAV 云盘对接 | [CloudStorageDriveService.java](../backend/src/main/java/com/nebulamind/cloud/CloudStorageDriveService.java) | ✅ |
 
 ### 4.2 前端功能
 
 | 功能 | 文件 | 状态 |
 |------|------|------|
-| 用户登录 | [Login.tsx](frontend/src/pages/Login.tsx) | ✅ |
-| 文件管理首页 | [Home.tsx](frontend/src/pages/Home.tsx) | ✅ |
-| 文件详情 | [FileDetail.tsx](frontend/src/pages/FileDetail.tsx) | ✅ |
-| 存储配置 | [StorageConfig.tsx](frontend/src/pages/StorageConfig.tsx) | ✅ |
-| 内容生成 | [Generate.tsx](frontend/src/pages/Generate.tsx) | ✅ |
-| 安全管理 | [Security.tsx](frontend/src/pages/Security.tsx) | ✅ |
-| 文件上传组件 | [Uploader.tsx](frontend/src/components/business/Uploader.tsx) | ✅ |
-| 文件卡片组件 | [FileCard.tsx](frontend/src/components/business/FileCard.tsx) | ✅ |
+| 用户登录 | [Login.tsx](../frontend/src/pages/Login.tsx) | ✅ |
+| 文件管理首页 | [Home.tsx](../frontend/src/pages/Home.tsx) | ✅ |
+| 文件详情 | [FileDetail.tsx](../frontend/src/pages/FileDetail.tsx) | ✅ |
+| 存储配置 | [StorageConfig.tsx](../frontend/src/pages/StorageConfig.tsx) | ✅ |
+| 内容生成 | [Generate.tsx](../frontend/src/pages/Generate.tsx) | ✅ |
+| 安全管理 | [Security.tsx](../frontend/src/pages/Security.tsx) | ✅ |
+| 文件上传组件 | [Uploader.tsx](../frontend/src/components/business/Uploader.tsx) | ✅ |
+| 文件卡片组件 | [FileCard.tsx](../frontend/src/components/business/FileCard.tsx) | ✅ |
 
 ### 4.3 容器化部署
 
