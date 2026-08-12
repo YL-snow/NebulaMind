@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -27,17 +29,18 @@ public class AuditLog {
     private User user;
 
     @Column(nullable = false, length = 50)
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = com.nebulamind.entity.converter.AuditLogActionConverter.class)
     private Action action;
 
     @Column(name = "resource_type", nullable = false, length = 50)
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = com.nebulamind.entity.converter.AuditLogResourceTypeConverter.class)
     private ResourceType resourceType;
 
     @Column(name = "resource_id", length = 100)
     private String resourceId;
 
     @Column(columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String details;
 
     @Column(name = "ip_address", nullable = false, length = 45)

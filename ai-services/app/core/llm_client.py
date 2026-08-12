@@ -92,8 +92,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         except Exception as e:
             raise RuntimeError(f"Failed to initialize OpenAI provider: {e}")
 
-    def _wait_rate_limit(self, timestamps, lock, name="chat"):
-        """主动速率限制：每分钟最多5次调用。超出时等待窗口重置"""
+    def _wait_rate_limit(self, timestamps, lock, name="chat", max_wait=10.0):
+        """主动速率限制：每分钟最多5次调用。超过可接受等待时间时立即降级。"""
         with lock:
             now = time.time()
             while timestamps and timestamps[0] <= now - self._rate_limit_window:
@@ -101,19 +101,26 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
             if len(timestamps) >= self._rate_limit_max:
                 wait = timestamps[0] + self._rate_limit_window - now + 1.0
-                if wait > 0:
-                    logger.info(f"[{name}] 速率限制：已达{self._rate_limit_max}次/分钟上限，等待{wait:.1f}s")
-                    time.sleep(wait)
+                if wait > max_wait:
+                    logger.warning(f"[{name}] 速率限制：还需等待{wait:.1f}s，超过{max_wait:.0f}s，立即降级")
+                    return False
+                logger.info(f"[{name}] 速率限制：已达{self._rate_limit_max}次/分钟上限，等待{wait:.1f}s")
+                time.sleep(wait)
                 timestamps.clear()
 
             timestamps.append(time.time())
+            return True
 
-    def _chat_with_retry(self, messages, max_retries=6, **kwargs):
+    def _chat_with_retry(self, messages, max_retries=3, **kwargs):
         """带速率限制和指数退避重试的 chat 调用（MaaS QPM 最大 5次/分钟）"""
         last_exception = None
         for attempt in range(max_retries):
             try:
-                self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "chat")
+                if not self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "chat"):
+                    logger.warning("MaaS API 主动限流等待超时，直接降级返回")
+                    return LLMResponse(
+                        content="RATE_LIMITED:API调用次数已达上限，请等待1分钟后再试。当前限制：每分钟最多{0}次调用。".format(self._rate_limit_max),
+                        model=self.llm_model, latency_ms=0)
                 start = time.time()
                 resp = self.client.chat.completions.create(
                     model=kwargs.get("model", self.llm_model),
@@ -134,7 +141,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 last_exception = e
                 error_str = str(e)
                 if "429" in error_str or "Too Many Requests" in error_str or "QPM" in error_str:
-                    wait = 10 * (2 ** attempt)  # 10, 20, 40, 80, 160, 320s
+                    wait = min(5 * (2 ** attempt), 20)  # 5, 10, 20s，避免超过后端 180s 超时
                     logger.warning(f"MaaS API 429 限流 (chat, attempt {attempt+1}/{max_retries}), 等待{wait}s: {e}")
                     with self._chat_lock:
                         self._chat_timestamps.clear()
@@ -150,7 +157,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         return self._chat_with_retry(messages, **kwargs)
 
     def get_embedding(self, text):
-        self._wait_rate_limit(self._embed_timestamps, self._embed_lock, "embedding")
+        if not self._wait_rate_limit(self._embed_timestamps, self._embed_lock, "embedding"):
+            raise RuntimeError("RATE_LIMITED:API调用次数已达上限，请等待1分钟后再试。")
         start = time.time()
         resp = self.client.embeddings.create(model=self.embedding_model, input=text)
         elapsed = int((time.time() - start) * 1000)
@@ -161,7 +169,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         results = []
         for i, doc in enumerate(documents):
             try:
-                self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "rerank")
+                if not self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "rerank"):
+                    logger.warning("MaaS API 主动限流等待超时，rerank 跳过")
+                    return []
                 resp = self.client.chat.completions.create(model=self.llm_model, messages=[{"role": "system", "content": "评估查询与文档的相关性，仅返回0到1之间的数字。"}, {"role": "user", "content": f"查询: {query}\n文档: {doc[:1000]}\n相关性分数(0-1):"}], temperature=0, max_tokens=10)
                 score = float(resp.choices[0].message.content.strip().strip("."))
                 score = max(0.0, min(1.0, score))
@@ -192,10 +202,10 @@ class LLMClient:
             success = True
             error_msg = None
             # 检测是否为降级响应
-            if response and "暂时不可用" in response.content:
+            if response and ("暂时不可用" in response.content or response.content.startswith("RATE_LIMITED:")):
                 is_fallback = True
                 success = False
-                error_msg = "服务暂时不可用（降级响应）"
+                error_msg = "服务限流或暂时不可用（降级响应）"
         except Exception as e:
             logger.error(f"LLM chat failed: {e}")
             success = False

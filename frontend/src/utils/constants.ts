@@ -33,6 +33,13 @@ export const FILE_TYPES = {
 
 export const ARCHIVE_FILE_TYPES = ['zip', 'rar', '7z', 'gz', 'tar', 'archive']
 
+export const TEXT_EDITABLE_EXTENSIONS = [
+  'txt', 'md', 'markdown', 'log', 'csv', 'json', 'xml', 'yml', 'yaml',
+  'ini', 'conf', 'properties', 'sql', 'html', 'htm', 'css', 'js', 'ts',
+  'jsx', 'tsx', 'java', 'kt', 'py', 'c', 'cpp', 'h', 'hpp', 'sh',
+  'bat', 'ps1', 'env', 'gitignore',
+]
+
 export const SENSITIVE_LEVELS = {
   high: { label: '高敏感', color: '#9e3131', bgColor: '#fee2e2' },
   medium: { label: '中敏感', color: '#eba834', bgColor: '#fef3c7' },

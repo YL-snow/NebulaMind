@@ -79,7 +79,7 @@ export const request = {
     instance.delete(url, config) as Promise<T>,
   patch: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> =>
     instance.patch(url, data, config) as Promise<T>,
-  upload: <T = unknown>(url: string, data: FormData, onProgress?: (progress: number) => void): Promise<T> =>
+  upload: <T = unknown>(url: string, data: FormData, onProgress?: (progress: number) => void, config?: AxiosRequestConfig): Promise<T> =>
     instance.post(url, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (event) => {
@@ -87,6 +87,7 @@ export const request = {
           onProgress(Math.round((event.loaded / event.total) * 100))
         }
       },
+      ...config,
     }) as Promise<T>,
 }
 

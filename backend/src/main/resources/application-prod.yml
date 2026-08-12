@@ -10,7 +10,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/erDiagram}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:change-me}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -67,8 +67,6 @@ nebulamind:
       llm-model: ${MAAS_LLM_MODEL:deepseek-v3_2}
       vision-base-url: ${MAAS_VISION_BASE_URL:https://maas-gz-api.ai-yuanjing.com/openapi/v1/yuanjingvl_plus}
       vision-model: ${MAAS_VISION_MODEL:YuanjingVL}
-      fallback-vision-models:
-        - glm-ocr
 
     ai-service:
       base-url: ${AI_SERVICE_BASE_URL:http://localhost:8081}
@@ -87,14 +85,6 @@ nebulamind:
         extract-url: ${AI_EXTRACT_URL:/api/v1/generate/extract}
         report-url: ${AI_REPORT_URL:/api/v1/generate/report}
         ppt-url: ${AI_PPT_URL:/api/v1/generate/ppt}
-
-    unicom-cloud-drive:
-      base-url: ${UNICOM_CLOUD_DRIVE_BASE_URL:}
-      app-id: ${UNICOM_APP_ID:}
-      app-secret: ${UNICOM_APP_SECRET:}
-      redirect-uri: ${UNICOM_REDIRECT_URI:http://localhost:8080/api/v1/cloud-drive/callback}
-      timeout: 30000
-
   security:
     jwt:
       secret: ${JWT_SECRET:}

@@ -31,6 +31,7 @@ export interface FileItem {
   sensitiveLevel: 'high' | 'medium' | 'low' | 'normal'
   isEncrypted: boolean
   encryptionKeyId?: string
+  encryptionMode?: 'NONE' | 'SERVER' | 'CLIENT'
   aiStatus: 'pending' | 'processing' | 'completed' | 'failed'
   version: number
   createdAt: string
@@ -216,6 +217,7 @@ export interface SecurityDetectResponse {
   sensitiveItems: SensitiveItem[]
   scannedAt: string
   detectionMethod: string
+  warning?: string
   autoEncrypted: boolean
 }
 
@@ -224,6 +226,7 @@ export interface SecurityEncryptResponse {
   isEncrypted: boolean
   encryptedAt: string
   keyId: string
+  encryptionMode?: 'NONE' | 'SERVER' | 'CLIENT'
 }
 
 export interface VersionItem {

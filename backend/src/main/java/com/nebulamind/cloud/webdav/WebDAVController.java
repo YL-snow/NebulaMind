@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.InputStream;
 import java.net.URLEncoder;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
@@ -64,7 +65,7 @@ public class WebDAVController {
                     .contentType(org.springframework.http.MediaType.parseMediaType(file.getMimeType()))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"; filename*=UTF-8''" + encodedFileName)
                     .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(file.getSize()))
-                    .body(inputStream);
+                    .body(inputStream.readAllBytes());
         } catch (Exception e) {
             log.error("Failed to handle WebDAV GET/HEAD request", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -104,6 +105,13 @@ public class WebDAVController {
                 existingFile = fileService.getFileById(UUID.fromString(fileId), userId);
             } catch (Exception e) {
                 existingFile = null;
+            }
+
+            if (existingFile == null) {
+                existingFile = fileService.findFileByContent(userId, content).orElse(null);
+            }
+            if (existingFile != null) {
+                return ResponseEntity.ok().build();
             }
 
             String contentType = request.getHeader("Content-Type");
@@ -169,10 +177,8 @@ public class WebDAVController {
         if (requestURI.startsWith("/webdav/")) {
             String path = requestURI.substring("/webdav/".length());
             int idx = path.indexOf('/');
-            if (idx > 0) {
-                return path.substring(0, idx);
-            }
-            return path;
+            String segment = idx > 0 ? path.substring(0, idx) : path;
+            return URLDecoder.decode(segment, StandardCharsets.UTF_8);
         }
         return null;
     }
@@ -237,7 +243,8 @@ public class WebDAVController {
 
     private String formatDate(java.time.LocalDateTime dateTime) {
         if (dateTime == null) return "";
-        return dateTime.format(java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME);
+        return java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME
+                .format(dateTime.atZone(java.time.ZoneId.systemDefault()));
     }
 
     private UUID getUserIdFromAuthentication(Authentication authentication) {

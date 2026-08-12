@@ -16,7 +16,7 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { icon: FolderOpen, label: '文件概览', path: '/' },
+  { icon: FolderOpen, label: '文件概览', path: '/home' },
   { icon: FileText, label: '内容生成', path: '/generate' },
   { icon: Shield, label: '安全管理', path: '/security' },
   { icon: Cloud, label: '云存储对接', path: '/storage-config' },

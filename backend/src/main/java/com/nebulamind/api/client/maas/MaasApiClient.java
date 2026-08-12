@@ -98,13 +98,12 @@ public class MaasApiClient {
     /**
      * 使用指定模型尝试一次多模态调用。
      * 视觉模型使用独立的 visionBaseUrl（YuanjingVL 专用端点），
-     * 回退模型使用 baseUrl（标准 OpenAI 兼容端点）。
+     * 主模型与回退模型统一使用 visionBaseUrl（元景视觉端点）。
      */
     private VisionResult tryChatVision(String model, String textPrompt, String imageBase64, String mimeType,
                                         double temperature, int maxTokens) {
-        // 主视觉模型使用 visionBaseUrl，回退模型使用 baseUrl
-        boolean isPrimaryVision = model.equals(properties.getVisionModel());
-        String baseUrl = isPrimaryVision ? properties.getVisionBaseUrl() : properties.getBaseUrl();
+        // 当前账号的视觉模型统一走元景视觉端点，回退模型也使用该端点
+        String baseUrl = properties.getVisionBaseUrl();
         String url = baseUrl + "/chat/completions";
         log.info("尝试视觉模型: {} (端点: {})", model, url);
 

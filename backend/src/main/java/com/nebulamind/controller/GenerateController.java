@@ -82,6 +82,10 @@ public class GenerateController {
                 return ResponseEntity.ok(archiveUnsupportedResponse(request.getFileId(), "摘要"));
             }
 
+            if (isClientEncrypted(file)) {
+                return ResponseEntity.ok(e2eeUnsupportedResponse(request.getFileId(), "摘要"));
+            }
+
             if (isImageFile(file)) {
                 String base64 = readImageAsBase64(file.getPath());
                 String mimeType = IMAGE_MIME_TYPES.get(file.getFileType().toLowerCase());
@@ -166,6 +170,10 @@ public class GenerateController {
                 return ResponseEntity.ok(archiveUnsupportedResponse(request.getFileId(), "内容提取"));
             }
 
+            if (isClientEncrypted(file)) {
+                return ResponseEntity.ok(e2eeUnsupportedResponse(request.getFileId(), "内容提取"));
+            }
+
             if (isImageFile(file)) {
                 String base64 = readImageAsBase64(file.getPath());
                 String mimeType = IMAGE_MIME_TYPES.get(file.getFileType().toLowerCase());
@@ -234,6 +242,14 @@ public class GenerateController {
             if (!selectedFiles.isEmpty() && selectedFiles.stream().allMatch(this::isImageFile)) {
                 return handleImageReport(selectedFiles, topic, userId);
             }
+
+            List<File> analyzableFiles = selectedFiles.stream()
+                    .filter(f -> !isClientEncrypted(f))
+                    .collect(Collectors.toList());
+            if (analyzableFiles.isEmpty()) {
+                return ResponseEntity.ok(e2eeUnsupportedResponse(null, "报告"));
+            }
+            selectedFiles = analyzableFiles;
 
             // 读取所有文件内容传给AI服务
             Map<String, String> contents = new java.util.HashMap<>();
@@ -304,6 +320,14 @@ public class GenerateController {
                 return handleImagePPT(selectedFiles, topic, userId);
             }
 
+            List<File> analyzableFiles = selectedFiles.stream()
+                    .filter(f -> !isClientEncrypted(f))
+                    .collect(Collectors.toList());
+            if (analyzableFiles.isEmpty()) {
+                return ResponseEntity.ok(e2eeUnsupportedResponse(null, "PPT 生成"));
+            }
+            selectedFiles = analyzableFiles;
+
             // 读取所有文件内容传给AI服务
             Map<String, String> contents = new java.util.HashMap<>();
             Map<String, String> filePaths = new java.util.HashMap<>();
@@ -350,6 +374,9 @@ public class GenerateController {
             }
 
             File file = fileService.getFileById(UUID.fromString(request.getFileId()), userId);
+            if (isClientEncrypted(file)) {
+                return ResponseEntity.ok(e2eeUnsupportedResponse(request.getFileId(), "格式转换"));
+            }
             String content = readFileContent(file.getPath());
             String targetFormat = request.getTargetFormat() != null ? request.getTargetFormat() : "docx";
 
@@ -378,6 +405,18 @@ public class GenerateController {
 
     private boolean isArchiveFile(File file) {
         return file.getFileType() != null && ARCHIVE_EXTENSIONS.contains(file.getFileType().toLowerCase());
+    }
+
+    private boolean isClientEncrypted(File file) {
+        return File.EncryptionMode.CLIENT.equals(file.getEncryptionMode());
+    }
+
+    private AiGenerateResponse e2eeUnsupportedResponse(String fileId, String action) {
+        return AiGenerateResponse.builder()
+                .fileId(fileId)
+                .content("该文件已开启端到端加密，服务器无法直接" + action + "。请在本地解密后再使用。")
+                .format("text")
+                .build();
     }
 
     private boolean isPptx(File file) {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, FolderOpen } from 'lucide-react'
 import { Input } from '@/components/common/Input'
 import { useAuthStore } from '@/stores/authStore'
@@ -7,6 +8,7 @@ import { useToast } from '@/components/common/Toast'
 
 export const Login = () => {
   const [isLogin, setIsLogin] = useState(true)
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -53,6 +55,7 @@ export const Login = () => {
           response.refreshToken,
         )
         success('登录成功')
+        navigate('/home', { replace: true })
       } else {
         await authApi.register({
           username: username.trim(),

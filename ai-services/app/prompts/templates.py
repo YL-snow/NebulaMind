@@ -18,7 +18,7 @@ SUMMARY_TEMPLATE = PromptTemplate("summary",
 
 SENSITIVE_DETECT_TEMPLATE = PromptTemplate("sensitive_detect",
     "你是敏感信息检测专家。识别文本中的敏感信息，严格按JSON格式输出。",
-    '请识别以下文本中的敏感信息。\n\n<DOCUMENT_START>\n{content}\n<DOCUMENT_END>\n\n敏感类型：id_card/phone/bank_card/email/address/company_secret/personal_info\n\n输出JSON：\n{{"sensitive_items": [{{"type": "类型","content": "内容","position": "位置"}}], "sensitive_level": "high/medium/low/normal", "confidence": 0.95}}\n\n仅输出JSON。')
+    '请识别以下文本中的敏感信息。\n\n<DOCUMENT_START>\n{content}\n<DOCUMENT_END>\n\n敏感类型：id_card/phone/bank_card/email/address/company_secret/personal_info\n\n要求：\n1. content 必须是文档中的原始内容，不要脱敏、不要省略。\n2. position 是敏感内容在文档中的起始字符位置，从0开始计数。\n3. 银行卡号必须是连续的16-19位数字，身份证号归类为 id_card，绝不能归类为 bank_card。\n\n输出JSON：\n{{"sensitive_items": [{{"type": "类型","content": "原文内容","position": 0}}], "sensitive_level": "high/medium/low/normal", "confidence": 0.95}}\n\n仅输出JSON。')
 
 QA_TEMPLATE = PromptTemplate("qa",
     '你是专业的文档问答助手。基于提供的文档内容回答问题。如果文档中没有相关信息，明确说明"文档中未提及相关信息"。',

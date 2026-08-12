@@ -1,6 +1,8 @@
 package com.nebulamind.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,7 +16,7 @@ import java.util.UUID;
 /**
  * 云存储配置实体。
  * 用户可在此配置对接不同的云存储/云盘服务，
- * 如 S3 兼容存储、联通云盘等。
+ * 如 S3 兼容存储、WebDAV 云盘等。
  */
 @Data
 @Entity
@@ -31,16 +33,17 @@ public class CloudStorageConfig {
     /** 关联用户 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
 
-    /** 配置名称（用户自定义，如"我的联通云盘"） */
+    /** 配置名称（用户自定义，如"我的 S3 存储"） */
     @Column(nullable = false, length = 100)
     private String name;
 
     /**
      * 存储类型：
      * - S3: S3 兼容对象存储（MinIO、AWS S3 等）
-     * - UNICOM: 联通云盘
+     * - WEBDAV: WebDAV 云盘
      */
     @Column(name = "provider_type", nullable = false, length = 20)
     private String providerType;
@@ -55,6 +58,7 @@ public class CloudStorageConfig {
 
     /** Secret Key / App Secret（AES 加密存储） */
     @Column(name = "secret_key", length = 512)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String secretKey;
 
     /** Bucket 名称 / 存储区域 */
@@ -64,10 +68,6 @@ public class CloudStorageConfig {
     /** 区域（S3 region） */
     @Column(length = 50)
     private String region;
-
-    /** OAuth2 重定向 URI（云盘类型时使用） */
-    @Column(name = "redirect_uri", length = 500)
-    private String redirectUri;
 
     /** 是否启用此配置 */
     @Column(name = "is_active", nullable = false)

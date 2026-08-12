@@ -1,4 +1,5 @@
 import { FileText, Download, Trash2, Eye } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import type { FileItem } from '@/api/types'
 import { formatFileSize, formatDate } from '@/utils/format'
 import { FILE_TYPES, SENSITIVE_LEVELS, AI_STATUS } from '@/utils/constants'
@@ -31,6 +32,16 @@ export const FileCard = ({ file, onClick, onDownload, onDelete }: FileCardProps)
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-text-primary truncate">{file.name}</h3>
+            {file.encryptionMode === 'CLIENT' && (
+              <span title="端到端加密（文件密钥）" className="flex-shrink-0">
+                <Lock className="h-4 w-4 text-green-500" />
+              </span>
+            )}
+            {file.isEncrypted && file.encryptionMode !== 'CLIENT' && (
+              <span title="服务端加密" className="flex-shrink-0">
+                <Lock className="h-4 w-4 text-neutral-400" />
+              </span>
+            )}
             <span
               className="px-2 py-0.5 text-xs rounded-full whitespace-nowrap flex-shrink-0"
               style={{ backgroundColor: sensitiveLevel.bgColor, color: sensitiveLevel.color }}
@@ -79,7 +90,7 @@ export const FileCard = ({ file, onClick, onDownload, onDelete }: FileCardProps)
             onDownload?.()
           }}
           className="p-2 text-text-secondary hover:text-accent-blue hover:bg-accent-blue/8 transition-colors"
-          title="下载"
+          title={file.encryptionMode === 'CLIENT' ? '解密并下载' : '下载'}
         >
           <Download className="h-4 w-4" />
         </button>

@@ -30,6 +30,7 @@ class SensitiveReport:
     matches: List[SensitiveMatch] = field(default_factory=list)
     summary: str = ""            # 人类可读摘要
     detection_method: str = ""   # regex / llm / keyword / hybrid
+    warning: str = ""            # 限流/降级等提示
 
 
 # ============================================================
@@ -40,25 +41,25 @@ SENSITIVE_PATTERNS = {
         "pattern": r'(?<![0-9])([1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx])(?![0-9])',
         "display": "身份证号",
         "severity": "high",
-        "mask": lambda m: m[:6] + "****" + m[-4:],  # 脱敏: 前6后4
+        "mask": lambda m: m[:3] + "*" * max(2, len(m) - 6) + m[-3:],  # 与后端脱敏规则保持一致
     },
     "phone": {
         "pattern": r'(?<![0-9])(1[3-9]\d{9})(?![0-9])',
         "display": "手机号",
         "severity": "medium",
-        "mask": lambda m: m[:3] + "****" + m[-4:],
+        "mask": lambda m: m[:3] + "*" * max(2, len(m) - 6) + m[-3:],
     },
     "bank_card": {
         "pattern": r'(?<![0-9])(\d{16,19})(?![0-9])',
         "display": "银行卡号",
         "severity": "high",
-        "mask": lambda m: m[:4] + "****" + m[-4:],
+        "mask": lambda m: m[:3] + "*" * max(2, len(m) - 6) + m[-3:],
     },
     "email": {
         "pattern": r'([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})',
         "display": "邮箱地址",
         "severity": "low",
-        "mask": lambda m: m[0] + "***@" + m.split("@")[1] if "@" in m else m,
+        "mask": lambda m: m[:3] + "*" * max(2, len(m) - 6) + m[-3:] if len(m) > 6 else "***",
     },
     "address": {
         "pattern": r'(?:北京市|天津市|上海市|重庆市|河北省|山西省|辽宁省|吉林省|黑龙江省|江苏省|浙江省|安徽省|福建省|江西省|山东省|河南省|湖北省|湖南省|广东省|海南省|四川省|贵州省|云南省|陕西省|甘肃省|青海省|内蒙古|广西|西藏|宁夏|新疆|香港|澳门)[一-龥]{0,10}(?:市|区|县|镇|乡|路|街|道|巷|弄|号|楼|室|层|栋|单元|小区|花园|大厦|公寓|广场|中心)[一-龥\d]{0,20}(?:号|楼|室|层|栋|单元)?',
@@ -96,6 +97,7 @@ class SensitiveDetector:
     """敏感信息检测器 - 混合策略（正则 + 关键词 + LLM NER）"""
 
     def __init__(self):
+        self._llm_warning = ""
         self._compiled_patterns = {}
         for key, config in SENSITIVE_PATTERNS.items():
             self._compiled_patterns[key] = re.compile(config["pattern"])
@@ -113,7 +115,8 @@ class SensitiveDetector:
             for m in pattern.finditer(content):
                 original = m.group(0)
                 # 跳过明显不是银行卡号的数字（如文件大小、时间戳）
-                if ptype == "bank_card" and self._is_false_bank_card(content, m.start(), original):
+                if ptype == "bank_card" and (self._is_false_bank_card(content, m.start(), original)
+                        or not self._is_luhn_valid(original)):
                     continue
                 matches.append(SensitiveMatch(
                     type=ptype,
@@ -143,6 +146,21 @@ class SensitiveDetector:
         if re.search(r'\b(?:size|大小|bytes)\s*[:=]?\s*' + re.escape(matched), ctx, re.IGNORECASE):
             return True
         return False
+
+    @staticmethod
+    def _is_luhn_valid(digits: str) -> bool:
+        """银行卡号 Luhn 校验，避免把身份证号等长数字误判为银行卡"""
+        if not digits or not digits.isdigit() or not 16 <= len(digits) <= 19:
+            return False
+        total = 0
+        for index, ch in enumerate(reversed(digits)):
+            digit = int(ch)
+            if index % 2 == 1:
+                digit *= 2
+                if digit > 9:
+                    digit -= 9
+            total += digit
+        return total % 10 == 0
 
     # ---- 敏感词检测 ----
     def detect_by_keywords(self, content: str) -> List[SensitiveMatch]:
@@ -178,21 +196,65 @@ class SensitiveDetector:
                 temperature=0.1,
             )
 
+            if response.content and (
+                "RATE_LIMITED" in response.content
+                or "暂时不可用" in response.content
+            ):
+                self._llm_warning = "AI 检测服务当前繁忙或已达调用上限，本次仅完成本地正则检测，请稍后重试。"
+                return []
+
             # 解析 LLM 返回的 JSON
             result = self._parse_llm_response(response.content)
             matches = []
             for item in result.get("sensitive_items", []):
+                ptype = item.get("type", "personal_info")
+                original = str(item.get("content", ""))[:200]
+                position = item.get("position", 0)
+                try:
+                    position = int(position)
+                except (TypeError, ValueError):
+                    position = 0
+                recovered = self._recover_llm_original(content, original, position)
+                if recovered is not None:
+                    original, position = recovered
+                if ptype == "bank_card" and not self._is_luhn_valid(original):
+                    continue
+                masked = self._mask_for_type(ptype, original)
                 matches.append(SensitiveMatch(
-                    type=item.get("type", "personal_info"),
-                    content=item.get("content", "")[:50],
-                    original=item.get("content", "")[:50],
-                    position=item.get("position", 0),
+                    type=ptype,
+                    content=masked,
+                    original=original,
+                    position=position,
                     confidence=float(item.get("confidence", 0.7)),
                 ))
             return matches
         except Exception as e:
             logger.warning(f"LLM sensitive detection failed: {e}")
             return []
+
+    def _recover_llm_original(self, content: str, raw: str, position: int) -> Optional[Tuple[str, int]]:
+        """当 LLM 返回脱敏内容时，尽量从原文按位置恢复完整敏感值"""
+        if content and position is not None and 0 <= position < len(content):
+            window = content[position:position + 60]
+            digit_match = re.match(r'\d{16,19}', window)
+            if digit_match:
+                return digit_match.group(), position
+        return None
+
+    @staticmethod
+    def _mask_for_type(ptype: str, original: str) -> str:
+        """按类型对敏感值脱敏；类型未知时使用通用规则"""
+        if not original:
+            return ""
+        config = SENSITIVE_PATTERNS.get(ptype)
+        if config:
+            try:
+                return config["mask"](original)
+            except Exception:
+                pass
+        if len(original) <= 6:
+            return "***"
+        return original[:3] + "***" + original[-3:]
 
     def _parse_llm_response(self, content: str) -> Dict:
         """鲁棒解析 LLM 返回的 JSON"""
@@ -215,6 +277,7 @@ class SensitiveDetector:
         """
         all_matches: List[SensitiveMatch] = []
         methods = []
+        self._llm_warning = ""
 
         # 1. 正则检测
         regex_matches = self.detect_by_regex(content)
@@ -252,6 +315,7 @@ class SensitiveDetector:
             matches=all_matches,
             summary=summary,
             detection_method="+".join(methods) if methods else "hybrid",
+            warning=self._llm_warning,
         )
 
     # ---- 敏感级别评估 ----

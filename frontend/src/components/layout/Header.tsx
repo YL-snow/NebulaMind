@@ -105,8 +105,19 @@ export const Header = ({ title }: HeaderProps) => {
     }
   }
 
+
+
+
+
+
+
+
+
   return (
     <header className="h-16 bg-white border-b border-neutral-200 px-6 flex items-center justify-between sticky top-0 z-30">
+
+
+
           <h1 className="text-xl font-semibold tracking-tight text-text-primary">
         {title}
       </h1>
@@ -314,6 +325,7 @@ export const Header = ({ title }: HeaderProps) => {
           </div>
         </div>
       )}
+
     </header>
   )
 }

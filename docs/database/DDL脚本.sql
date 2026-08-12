@@ -72,7 +72,7 @@ CREATE TABLE files (
     sensitive_level     VARCHAR(20)     NOT NULL DEFAULT 'normal',
     is_encrypted        BOOLEAN         NOT NULL DEFAULT FALSE,
     encryption_key_id   VARCHAR(100),
-    cloud_drive_file_id VARCHAR(200),                             -- 云盘/OSS文件原始ID（联通云盘、阿里云OSS等）
+    cloud_drive_file_id VARCHAR(200),                             -- 云盘/OSS文件原始ID（S3/WebDAV 外部存储）
     version             INTEGER         NOT NULL DEFAULT 1,
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
@@ -351,7 +351,7 @@ $$ LANGUAGE plpgsql;
 
 -- ============================================================================
 -- 10. 云存储配置表 (cloud_storage_configs)
---     用户可配置多个云存储账号（S3兼容存储、联通云盘、阿里云OSS等）
+--     用户可配置多个云存储账号（S3兼容存储、WebDAV云盘等）
 -- ============================================================================
 CREATE TABLE cloud_storage_configs (
     id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -363,7 +363,6 @@ CREATE TABLE cloud_storage_configs (
     secret_key          VARCHAR(512),
     bucket_name         VARCHAR(100),
     region              VARCHAR(50),
-    redirect_uri        VARCHAR(500),
     is_active           BOOLEAN         NOT NULL DEFAULT FALSE,
     last_test_success   BOOLEAN,
     last_test_at        TIMESTAMPTZ,
@@ -372,7 +371,7 @@ CREATE TABLE cloud_storage_configs (
     updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
 
     -- 约束
-    CONSTRAINT ck_cloud_storage_provider CHECK (provider_type IN ('S3', 'UNICOM')),
+    CONSTRAINT ck_cloud_storage_provider CHECK (provider_type IN ('S3', 'WEBDAV')),
 
     -- 外键
     CONSTRAINT fk_cloud_storage_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -410,7 +409,7 @@ COMMENT ON TABLE semantic_indexes IS '语义索引表 - 用于RAG检索的分片
 COMMENT ON TABLE ai_call_logs IS 'AI调用日志表 - 记录大模型调用记录(保留90天)';
 COMMENT ON TABLE audit_logs IS '审计日志表 - 记录安全敏感操作(保留180天)';
 COMMENT ON TABLE refresh_tokens IS '刷新令牌表 - 管理JWT Refresh Token';
-COMMENT ON TABLE cloud_storage_configs IS '云存储配置表 - 用户配置的云存储账号（S3/联通云盘/阿里云OSS等）';
+COMMENT ON TABLE cloud_storage_configs IS '云存储配置表 - 用户配置的云存储账号（S3/WebDAV等）';
 
 COMMENT ON COLUMN files.hash IS 'SHA-256文件哈希，用于重复检测';
 COMMENT ON COLUMN files.tags IS 'AI生成的标签数组，JSONB格式';
@@ -418,8 +417,8 @@ COMMENT ON COLUMN files.category IS 'AI分类结果';
 COMMENT ON COLUMN files.summary IS 'AI生成的文档摘要';
 COMMENT ON COLUMN files.sensitive_level IS '敏感等级：normal/low/medium/high';
 COMMENT ON COLUMN files.ai_status IS 'AI处理状态：pending/processing/completed/failed';
-COMMENT ON COLUMN files.cloud_drive_file_id IS '云盘/OSS文件原始ID，用于联通云盘、阿里云OSS等外部存储同步';
-COMMENT ON COLUMN cloud_storage_configs.provider_type IS '存储类型：S3（兼容存储）、UNICOM（联通云盘）';
+COMMENT ON COLUMN files.cloud_drive_file_id IS '云盘/OSS文件原始ID，用于S3/WebDAV外部存储导入去重';
+COMMENT ON COLUMN cloud_storage_configs.provider_type IS '存储类型：S3（兼容存储）、WEBDAV（WebDAV云盘）';
 COMMENT ON COLUMN file_contents.chunk_metadata IS '分片元数据，如{"page":5,"section":"第三章"}';
 COMMENT ON COLUMN semantic_indexes.metadata IS '分片元数据，如{"page":5,"section":"第三章","title":"标题"}';
 COMMENT ON COLUMN ai_call_logs.prompt IS 'Prompt内容(脱敏后)，生产环境建议不存储原始Prompt';

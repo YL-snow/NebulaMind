@@ -19,9 +19,10 @@ export const filesApi = {
 
   detail: (fileId: string) => request.get<FileItem>(`/files/${fileId}`),
 
-  upload: (formData: FormData, onProgress?: (progress: number) => void) =>
+  upload: (formData: FormData, onProgress?: (progress: number) => void, encrypted?: boolean) =>
     request.post<FileItem>('/files/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      params: encrypted ? { encrypted: 'true' } : undefined,
       onUploadProgress: onProgress
         ? (event) => {
             if (event.total) {
@@ -62,6 +63,23 @@ export const filesApi = {
     };
   },
 
+  uploadVersion: (fileId: string, file: File, comment: string, onProgress?: (progress: number) => void, encrypted?: boolean) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (comment) formData.append('comment', comment)
+    return request.upload<FileItem>(`/files/${fileId}/versions/upload${encrypted ? '?encrypted=true' : ''}`, formData, onProgress)
+  },
+
+  saveTextVersion: (fileId: string, content: string, comment: string) =>
+    request.post<FileItem>(`/files/${fileId}/versions`, { content, comment }),
+
+  versionSummary: (fileId: string, versionA?: number, versionB?: number) =>
+    request.post<{ fileId: string; versionA: number; versionB: number; summary: string }>(
+      `/files/${fileId}/versions/summary`,
+      { versionA, versionB },
+      { timeout: 60000 }
+    ),
+
   versionDiff: (fileId: string, versionA: number, versionB: number) =>
     request.get<{
       fileId: string
@@ -80,5 +98,7 @@ export const filesApi = {
     }>(`/files/${fileId}/versions/diff`, { params: { versionA, versionB } }),
 
   restoreVersion: (fileId: string, version: number) =>
-    request.post(`/files/${fileId}/versions/rollback/${version}`),
+    request.post<{ fileId: string; currentVersion: number; rolledBackFrom: number; message: string }>(
+      `/files/${fileId}/versions/rollback/${version}`,
+    ),
 }

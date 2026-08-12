@@ -47,6 +47,15 @@ public class CachedFileService {
 
     @Transactional
     @CacheEvict(value = {"userFiles", "fileDetails"}, key = "#userId")
+    public File createFile(com.nebulamind.dto.FileRequest request, UUID userId, boolean skipProcessing) {
+        File file = fileService.createFile(request, userId, skipProcessing);
+        cacheService.evictFileList(userId.toString());
+        log.debug("Cache evicted after file creation: {}", file.getId());
+        return file;
+    }
+
+    @Transactional
+    @CacheEvict(value = {"userFiles", "fileDetails"}, key = "#userId")
     public File updateFile(UUID id, com.nebulamind.dto.FileRequest request, UUID userId) {
         File file = fileService.updateFile(id, request, userId);
         cacheService.evictFileList(userId.toString());

@@ -38,6 +38,11 @@ public class AiServiceClient {
     }
 
     public AiClassifyResponse classifyFile(String fileId, String content, String filePath) throws IOException {
+        return classifyFile(fileId, content, filePath, null, null);
+    }
+
+    public AiClassifyResponse classifyFile(String fileId, String content, String filePath,
+                                              String fileContentBase64, String fileType) throws IOException {
         String url = config.getBaseUrl() + config.getClassification().getClassifyUrl();
         
         Map<String, Object> body = new java.util.HashMap<>();
@@ -45,6 +50,12 @@ public class AiServiceClient {
         body.put("content", content);
         if (filePath != null && !filePath.isEmpty()) {
             body.put("file_path", filePath);
+        }
+        if (fileContentBase64 != null && !fileContentBase64.isEmpty()) {
+            body.put("file_content_base64", fileContentBase64);
+        }
+        if (fileType != null && !fileType.isEmpty()) {
+            body.put("file_type", fileType);
         }
 
         String response = postJson(url, body);
@@ -283,6 +294,11 @@ public class AiServiceClient {
     }
 
     public AiSensitiveResponse detectSensitive(String fileId, String content, boolean useLlm, String filePath) throws IOException {
+        return detectSensitive(fileId, content, useLlm, filePath, null, null);
+    }
+
+    public AiSensitiveResponse detectSensitive(String fileId, String content, boolean useLlm, String filePath,
+                                                String fileContentBase64, String fileType) throws IOException {
         String url = config.getBaseUrl() + config.getSensitive().getDetectUrl();
 
         Map<String, Object> body = new java.util.HashMap<>();
@@ -291,6 +307,12 @@ public class AiServiceClient {
         body.put("use_llm", useLlm);
         if (filePath != null && !filePath.isEmpty()) {
             body.put("file_path", filePath);
+        }
+        if (fileContentBase64 != null && !fileContentBase64.isEmpty()) {
+            body.put("file_content_base64", fileContentBase64);
+        }
+        if (fileType != null && !fileType.isEmpty()) {
+            body.put("file_type", fileType);
         }
 
         String response = postJson(url, body);

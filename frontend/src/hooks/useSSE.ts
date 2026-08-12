@@ -9,10 +9,23 @@ interface UseSSEOptions {
   onClose?: () => void
 }
 
+const MAX_RECONNECT_ATTEMPTS = 5
+
 export const useSSE = ({ onEvent, onError, onClose }: UseSSEOptions = {}) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const retryTimerRef = useRef<number | null>(null)
+  const reconnectAttemptsRef = useRef(0)
+  const onEventRef = useRef(onEvent)
+  const onErrorRef = useRef(onError)
+  const onCloseRef = useRef(onClose)
   const [isConnected, setIsConnected] = useState(false)
-  const [reconnectAttempts, setReconnectAttempts] = useState(0)
+
+  useEffect(() => {
+    onEventRef.current = onEvent
+    onErrorRef.current = onError
+    onCloseRef.current = onClose
+  })
 
   const handleFileEvent = useCallback((event: SSEEvent) => {
     const { eventType, data } = event
@@ -47,6 +60,11 @@ export const useSSE = ({ onEvent, onError, onClose }: UseSSEOptions = {}) => {
   const connect = useCallback(async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
     }
 
     const token = localStorage.getItem('accessToken')
@@ -55,10 +73,11 @@ export const useSSE = ({ onEvent, onError, onClose }: UseSSEOptions = {}) => {
 
     const abortController = new AbortController()
     abortControllerRef.current = abortController
-    setIsConnected(true)
+
+    const apiOrigin = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '') : ''
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/events/connect`, {
+      const response = await fetch(`${apiOrigin}/sse/subscribe/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'text/event-stream',
@@ -69,6 +88,9 @@ export const useSSE = ({ onEvent, onError, onClose }: UseSSEOptions = {}) => {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
+
+      reconnectAttemptsRef.current = 0
+      setIsConnected(true)
 
       const reader = response.body?.getReader()
       if (!reader) {
@@ -92,7 +114,7 @@ export const useSSE = ({ onEvent, onError, onClose }: UseSSEOptions = {}) => {
             try {
               const parsedEvent: SSEEvent = JSON.parse(data)
               handleFileEvent(parsedEvent)
-              onEvent?.(parsedEvent)
+              onEventRef.current?.(parsedEvent)
             } catch {
               console.error('Failed to parse SSE event')
             }
@@ -100,38 +122,46 @@ export const useSSE = ({ onEvent, onError, onClose }: UseSSEOptions = {}) => {
         }
       }
 
-      onClose?.()
+      setIsConnected(false)
+      onCloseRef.current?.()
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
-        onError?.(error)
+        onErrorRef.current?.(error)
         setIsConnected(false)
 
-        if (reconnectAttempts < 5) {
-          const delay = Math.pow(2, reconnectAttempts) * 1000
-          setTimeout(() => {
-            setReconnectAttempts((prev) => prev + 1)
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          const delay = Math.pow(2, reconnectAttemptsRef.current) * 1000
+          reconnectAttemptsRef.current += 1
+          retryTimerRef.current = window.setTimeout(() => {
+            retryTimerRef.current = null
             connect()
           }, delay)
         }
       }
     }
-  }, [onEvent, onError, onClose, handleFileEvent, reconnectAttempts])
+  }, [handleFileEvent])
 
   const disconnect = useCallback(() => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
+    reconnectAttemptsRef.current = 0
     setIsConnected(false)
   }, [])
 
   useEffect(() => {
+    if (!isAuthenticated) return
     connect()
 
     return () => {
       disconnect()
     }
-  }, [connect, disconnect])
+  }, [connect, disconnect, isAuthenticated])
 
   return { connect, disconnect, isConnected }
 }

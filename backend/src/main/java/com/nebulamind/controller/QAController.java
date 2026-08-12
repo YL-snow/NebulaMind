@@ -51,6 +51,14 @@ public class QAController {
             String filePath = null;
             try {
                 File file = fileService.getFileById(UUID.fromString(request.getFileId()), userId);
+                if (File.EncryptionMode.CLIENT.equals(file.getEncryptionMode())) {
+                    return ResponseEntity.ok(AiQAResponse.builder()
+                            .question(request.getQuestion())
+                            .answer("该文件已开启端到端加密，服务器无法读取内容回答问题，请在本地解密后再使用。")
+                            .sourceFileId(request.getFileId())
+                            .confidence(0.0)
+                            .build());
+                }
                 fileContent = readFileContent(file.getPath());
                 filePath = file.getPath();
             } catch (Exception e) {
@@ -110,6 +118,9 @@ public class QAController {
             for (String fid : fileIds) {
                 try {
                     File file = fileService.getFileById(UUID.fromString(fid), userId);
+                    if (File.EncryptionMode.CLIENT.equals(file.getEncryptionMode())) {
+                        continue;
+                    }
                     String content = readFileContent(file.getPath());
                     if (content != null && !content.isEmpty()) {
                         fileContents.put(fid, content.length() > 3000 ? content.substring(0, 3000) : content);
@@ -118,6 +129,14 @@ public class QAController {
                 } catch (Exception e) {
                     log.warn("Failed to read file content for cross QA, fileId={}: {}", fid, e.getMessage());
                 }
+            }
+            if (fileContents.isEmpty()) {
+                return ResponseEntity.ok(AiQAResponse.builder()
+                        .question(request.getQuestion())
+                        .answer("所选文件均已开启端到端加密，服务器无法读取内容回答问题，请在本地解密后再使用。")
+                        .sourceFileId("")
+                        .confidence(0.0)
+                        .build());
             }
             
             AiQAResponse response = aiServiceClient.crossDocumentQA(fileIds, request.getQuestion(), fileContents, filePaths);

@@ -27,6 +27,8 @@ public class AiSensitiveResponse {
     @JsonAlias({"detection_method"})
     private String detectionMethod;
 
+    private String warning;
+
     @Data
     public static class SensitiveMatchItem {
         private String type;

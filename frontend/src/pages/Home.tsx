@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Filter, Grid, List, TrendingUp, Folder, FileText, Shield, Cloud, Calendar, Star, Clock, ArrowRight, Copy, Trash2 } from 'lucide-react'
+import { Plus, Filter, Grid, List, TrendingUp, Folder, FileText, Shield, Cloud, Star, Clock, ArrowRight, Copy, Trash2, Download, KeyRound } from 'lucide-react'
+import { Lock, LockOpen } from 'lucide-react'
 import { Button } from '@/components/common/Button'
 import { Card, CardBody } from '@/components/common/Card'
 import { FileCard } from '@/components/business/FileCard'
@@ -11,7 +12,8 @@ import { useFileStore } from '@/stores/fileStore'
 import { filesApi } from '@/api/files'
 import { useToast } from '@/components/common/Toast'
 import { formatFileSize } from '@/utils/format'
-import type { DuplicateGroup } from '@/api/types'
+import { generateFileKey, encryptBlobWithFileKey, decryptBlobWithFileKey } from '@/utils/e2eeCrypto'
+import type { DuplicateGroup, FileItem } from '@/api/types'
 
 export const Home = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
@@ -22,6 +24,15 @@ export const Home = () => {
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([])
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [duplicateLoading, setDuplicateLoading] = useState(false)
+  const [e2eeUpload, setE2eeUpload] = useState(false)
+  const [oneTimeKeys, setOneTimeKeys] = useState<{ fileName: string; key: string }[]>([])
+  const [showOneTimeKeyModal, setShowOneTimeKeyModal] = useState(false)
+  const [copiedKeyIndex, setCopiedKeyIndex] = useState<number | null>(null)
+  const [keyPrompt, setKeyPrompt] = useState<{ fileId: string; fileName: string } | null>(null)
+  const [keyPromptInput, setKeyPromptInput] = useState('')
+  const [keyPromptError, setKeyPromptError] = useState('')
+  const [keyPromptLoading, setKeyPromptLoading] = useState(false)
+  const [unlockedFileKeys, setUnlockedFileKeys] = useState<Record<string, string>>({})
 
   const { files, loading, setFiles } = useFileStore()
   const { error, success } = useToast()
@@ -32,8 +43,18 @@ export const Home = () => {
 
   const fetchFiles = async () => {
     try {
-      const response = await filesApi.list()
-      setFiles(response.content || [])
+      const pageSize = 500
+      const allFiles: FileItem[] = []
+      let page = 0
+      let totalElements = 0
+      do {
+        const response = await filesApi.list({ page, pageSize })
+        const content = response.content || []
+        allFiles.push(...content)
+        totalElements = response.totalElements ?? allFiles.length
+        page += 1
+      } while (allFiles.length < totalElements && page < 50)
+      setFiles(allFiles)
     } catch (err) {
       error((err as Error).message || '获取文件列表失败')
     }
@@ -54,6 +75,8 @@ export const Home = () => {
     }))
     setUploadingFiles(newFiles)
 
+    const newKeys: { fileName: string; key: string }[] = []
+
     let successCount = 0
     for (const [index, file] of selectedFiles.entries()) {
       const uploadId = newFiles[index].id
@@ -64,13 +87,25 @@ export const Home = () => {
 
       const formData = new FormData()
       formData.append('file', file)
+      let pendingKey: string | null = null
+      if (e2eeUpload) {
+        const fileKey = await generateFileKey()
+        const plain = new Uint8Array(await file.arrayBuffer())
+        const encryptedData = await encryptBlobWithFileKey(plain, fileKey)
+        formData.set('file', new File([encryptedData], file.name, { type: file.type }))
+        pendingKey = fileKey.base64
+      }
 
       try {
-        await filesApi.upload(formData, (progress) => {
-          setUploadingFiles((prev) =>
-            prev.map((f) => (f.id === uploadId ? { ...f, progress } : f))
-          )
-        })
+        await filesApi.upload(
+          formData,
+          (progress) => {
+            setUploadingFiles((prev) =>
+              prev.map((f) => (f.id === uploadId ? { ...f, progress } : f))
+            )
+          },
+          e2eeUpload
+        )
 
         setUploadingFiles((prev) =>
           prev.map((f) =>
@@ -78,6 +113,9 @@ export const Home = () => {
           )
         )
         successCount++
+        if (pendingKey) {
+          newKeys.push({ fileName: file.name, key: pendingKey })
+        }
       } catch (err) {
         const errorMessage = (err as Error).message || ''
         setUploadingFiles((prev) =>
@@ -97,7 +135,13 @@ export const Home = () => {
 
     if (successCount > 0) {
       await fetchFiles()
-      success(`成功上传 ${successCount} 个文件`)
+      if (newKeys.length > 0) {
+        setOneTimeKeys(newKeys)
+        setShowOneTimeKeyModal(true)
+        success(`成功上传 ${successCount} 个文件，请立即保存文件密钥`)
+      } else {
+        success(`成功上传 ${successCount} 个文件`)
+      }
     }
   }
 
@@ -107,6 +151,97 @@ export const Home = () => {
 
   const handleClearCompleted = () => {
     setUploadingFiles((prev) => prev.filter((f) => f.status !== 'completed'))
+  }
+
+  const handleCopyOneTimeKey = async (index: number) => {
+    const item = oneTimeKeys[index]
+    if (!item) return
+    await navigator.clipboard.writeText(item.key)
+    setCopiedKeyIndex(index)
+    setTimeout(() => setCopiedKeyIndex(null), 2000)
+  }
+
+  const handleDownloadOneTimeKeys = () => {
+    if (oneTimeKeys.length === 0) return
+    const content = [
+      'NebulaMind 文件密钥备份',
+      '请妥善保管以下密钥，服务器不会保存。密钥只在加密上传时显示一次，丢失后文件无法解密。',
+      '',
+      ...oneTimeKeys.map((item) => `文件名: ${item.fileName}\n文件密钥: ${item.key}`)
+    ].join('\n\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'nebulamind-file-keys.txt'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadFile = async (file: FileItem) => {
+    try {
+      let key: string | undefined
+      if (file.encryptionMode === 'CLIENT') {
+        key = unlockedFileKeys[file.id]
+        if (!key) {
+          setKeyPrompt({ fileId: file.id, fileName: file.name })
+          setKeyPromptInput('')
+          setKeyPromptError('')
+          return
+        }
+      }
+      const blob: Blob = await filesApi.download(file.id) as unknown as Blob
+      let bytes = new Uint8Array(await blob.arrayBuffer())
+      if (file.encryptionMode === 'CLIENT' && key) {
+        bytes = await decryptBlobWithFileKey(bytes, key)
+      }
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: file.mimeType || blob.type }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      const msg = (err as Error).message || '下载失败'
+      error(msg)
+      console.error('Download failed:', msg)
+    }
+  }
+
+  const handleConfirmKeyPrompt = async () => {
+    if (!keyPrompt) return
+    const key = keyPromptInput.trim()
+    if (!key) {
+      setKeyPromptError('请输入文件密钥')
+      return
+    }
+    setKeyPromptLoading(true)
+    try {
+      const blob: Blob = await filesApi.download(keyPrompt.fileId) as unknown as Blob
+      const bytes = new Uint8Array(await blob.arrayBuffer())
+      const plain = await decryptBlobWithFileKey(bytes, key)
+      setUnlockedFileKeys((prev) => ({ ...prev, [keyPrompt.fileId]: key }))
+      const target = files.find((f) => f.id === keyPrompt.fileId)
+      const url = window.URL.createObjectURL(new Blob([plain], { type: target?.mimeType || blob.type }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = target?.name || keyPrompt.fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      setKeyPrompt(null)
+      setKeyPromptInput('')
+      setKeyPromptError('')
+    } catch (err) {
+      setKeyPromptError((err as Error).message || '文件密钥不正确')
+    } finally {
+      setKeyPromptLoading(false)
+    }
   }
 
   const handleDetectDuplicates = async () => {
@@ -173,15 +308,21 @@ export const Home = () => {
     return acc
   }, {} as Record<string, number>)
 
-  const completedCount = files.filter((f) => f.aiStatus === 'completed').length
-  const encryptedCount = files.filter((f) => f.isEncrypted).length
-  const highSensitiveCount = files.filter((f) => f.sensitiveLevel === 'high').length
+  const getAiStatus = (file: FileItem) => (file.aiStatus || 'pending').toLowerCase()
+  const getSensitiveLevel = (file: FileItem) => (file.sensitiveLevel || 'normal').toLowerCase()
+
+  const completedCount = files.filter((f) => getAiStatus(f) === 'completed').length
+  const safeCount = files.filter((f) => {
+    const level = getSensitiveLevel(f)
+    return level === 'normal' || level === 'low'
+  }).length
+  const highSensitiveCount = files.filter((f) => getSensitiveLevel(f) === 'high').length
 
   const recentFiles = [...files]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5)
 
-  const importantFiles = files.filter((f) => f.sensitiveLevel === 'high' || f.category === '财务报告' || f.category === '合同').slice(0, 5)
+  const importantFiles = files.filter((f) => getSensitiveLevel(f) === 'high' || f.category === '财务报告' || f.category === '合同').slice(0, 5)
 
   const stats = [
     {
@@ -209,7 +350,7 @@ export const Home = () => {
     {
       icon: Shield,
       label: '安全文件',
-      value: `${encryptedCount}`,
+      value: `${safeCount}`,
       color: 'text-primary-500',
       bgColor: 'bg-primary-50',
     },
@@ -300,22 +441,7 @@ export const Home = () => {
                   key={file.id}
                   file={file}
                   onClick={() => window.location.href = `/files/${file.id}`}
-                  onDownload={async () => {
-                    try {
-                      const blob: Blob = await filesApi.download(file.id) as unknown as Blob;
-                      const url = window.URL.createObjectURL(new Blob([blob]));
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = file.name;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      window.URL.revokeObjectURL(url);
-                    } catch (err) {
-                      const msg = (err as Error).message || '下载失败';
-                      console.error('Download failed:', msg);
-                    }
-                  }}
+                  onDownload={() => handleDownloadFile(file)}
                   onDelete={() => handleDelete(file.id, file.name)}
                 />
               ))}
@@ -395,38 +521,25 @@ export const Home = () => {
             </Card>
           )}
 
-          <Card>
-            <div className="p-4 border-b border-neutral-200">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-accent-blue" />
-                <h3 className="font-semibold text-text-primary">今日待办</h3>
-              </div>
-            </div>
-            <CardBody>
-              <ul className="space-y-2 text-sm text-neutral-600">
-                {completedCount < files.length && (
-                  <li className="flex items-start gap-2">
-                    <input type="checkbox" className="mt-1 w-4 h-4 rounded border-neutral-300 text-accent-blue" />
-                    <span>等待AI分析 {files.length - completedCount} 个文件</span>
-                  </li>
-                )}
-                {highSensitiveCount > encryptedCount && (
-                  <li className="flex items-start gap-2">
-                    <input type="checkbox" className="mt-1 w-4 h-4 rounded border-neutral-300 text-accent-blue" />
-                    <span>加密 {highSensitiveCount - encryptedCount} 个敏感文件</span>
-                  </li>
-                )}
-                <li className="flex items-start gap-2">
-                  <input type="checkbox" className="mt-1 w-4 h-4 rounded border-neutral-300 text-accent-blue" />
-                  <span>整理文件分类</span>
-                </li>
-              </ul>
-            </CardBody>
-          </Card>
         </div>
       </div>
 
       <Modal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} title="上传文件">
+        <div className="flex items-center justify-between p-3 mb-4 bg-neutral-50 border border-neutral-200 rounded-card">
+          <div className="flex items-center gap-2">
+            {e2eeUpload ? <Lock className="h-4 w-4 text-green-500" /> : <LockOpen className="h-4 w-4 text-text-secondary" />}
+            <div>
+              <p className="text-sm font-medium text-text-primary">端到端加密上传</p>
+              <p className="text-xs text-text-secondary">文件在浏览器本地加密，每个文件生成专属密钥，仅显示一次，请妥善保存</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setE2eeUpload((prev) => !prev)}
+            className={`w-12 h-6 rounded-full transition-colors ${e2eeUpload ? 'bg-green-500' : 'bg-neutral-200'}`}
+          >
+            <span className={`block w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${e2eeUpload ? 'translate-x-6' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
         <Uploader
           files={uploadingFiles}
           onFileSelect={handleFileSelect}
@@ -472,6 +585,66 @@ export const Home = () => {
             <p className="text-sm text-text-secondary mt-1">所有文件都是唯一的</p>
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={showOneTimeKeyModal} onClose={() => { setShowOneTimeKeyModal(false); setOneTimeKeys([]) }} title="文件密钥（仅显示一次）">
+        <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 text-sm text-red-600">
+          请立即复制并妥善保存以下密钥，关闭后将无法再次查看。服务器不会保存密钥，丢失后文件将无法解密。
+        </div>
+        <div className="space-y-4 max-h-80 overflow-y-auto">
+          {oneTimeKeys.map((item, index) => (
+            <div key={index} className="border border-neutral-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-text-primary mb-2 truncate">{item.fileName}</p>
+              <div className="flex items-start gap-2">
+                <code className="flex-1 min-w-0 px-3 py-2 bg-neutral-50 border border-neutral-200 text-xs font-mono break-all">{item.key}</code>
+                <button
+                  onClick={() => handleCopyOneTimeKey(index)}
+                  className="px-3 py-2 text-sm bg-accent-blue text-white hover:bg-accent-blue/90 transition-colors flex items-center gap-1 flex-shrink-0"
+                >
+                  <Copy className="h-4 w-4" />
+                  {copiedKeyIndex === index ? '已复制' : '复制'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-3 mt-4">
+          <Button variant="outline" onClick={handleDownloadOneTimeKeys}>
+            <Download className="h-4 w-4 mr-2" />
+            下载密钥文件
+          </Button>
+          <Button variant="primary" onClick={() => { setShowOneTimeKeyModal(false); setOneTimeKeys([]) }}>
+            我已保存密钥
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!keyPrompt} onClose={() => { setKeyPrompt(null); setKeyPromptInput(''); setKeyPromptError('') }} title={keyPrompt ? `输入文件密钥 - ${keyPrompt.fileName}` : '输入文件密钥'}>
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-accent-blue" />
+            该文件使用专属密钥加密，请输入加密上传时显示的密钥进行解密。
+          </p>
+          {keyPromptError && (
+            <div className="px-3 py-2 bg-red-50 border border-red-200 text-sm text-red-600">{keyPromptError}</div>
+          )}
+          <input
+            type="text"
+            value={keyPromptInput}
+            onChange={(e) => setKeyPromptInput(e.target.value)}
+            className="w-full px-3 py-2 text-sm font-mono border border-neutral-200 bg-white focus:outline-none focus:border-accent-blue"
+            placeholder="粘贴文件密钥"
+            autoFocus
+          />
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => { setKeyPrompt(null); setKeyPromptInput(''); setKeyPromptError('') }}>
+              取消
+            </Button>
+            <Button variant="primary" onClick={handleConfirmKeyPrompt} loading={keyPromptLoading}>
+              解密并下载
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

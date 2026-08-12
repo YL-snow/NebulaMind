@@ -16,31 +16,23 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>
 }
 
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuthStore()
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />
-  }
-  return <>{children}</>
-}
-
 export const router = createBrowserRouter([
   {
     path: '/',
+    element: <Login />,
+  },
+  {
+    path: '/login',
+    element: <Login />,
+  },
+  {
+    path: '/home',
     element: (
       <ProtectedRoute>
         <Layout title="文件概览">
           <Home />
         </Layout>
       </ProtectedRoute>
-    ),
-  },
-  {
-    path: '/login',
-    element: (
-      <PublicRoute>
-        <Login />
-      </PublicRoute>
     ),
   },
   {

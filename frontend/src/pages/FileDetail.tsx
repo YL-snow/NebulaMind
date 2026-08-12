@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, Edit3, Trash2, Clock, User, Tag, Shield, FileText, Sparkles, ChevronDown, ChevronUp, RefreshCw, History, Brain, Save } from 'lucide-react'
+import { ArrowLeft, Download, Edit3, Trash2, Clock, User, Tag, Shield, FileText, Sparkles, ChevronDown, ChevronUp, RefreshCw, History, Brain, Save, Upload, Unlock, Lock, Copy } from 'lucide-react'
 import { Button } from '@/components/common/Button'
 import { Card, CardHeader, CardBody } from '@/components/common/Card'
 import { TextArea } from '@/components/common/Input'
@@ -12,8 +12,8 @@ import { qaApi } from '@/api/qa'
 import { securityApi } from '@/api/security'
 import { generateApi } from '@/api/generate'
 import { formatFileSize, formatDate, formatDateTime } from '@/utils/format'
-import { FILE_TYPES, SENSITIVE_LEVELS, AI_STATUS } from '@/utils/constants'
-import { ARCHIVE_FILE_TYPES } from '@/utils/constants'
+import { encryptBlobWithKeyBase64, decryptBlobWithFileKey, encodeText, decodeText, generateFileKey, encryptBlobWithFileKey } from '@/utils/e2eeCrypto'
+import { FILE_TYPES, SENSITIVE_LEVELS, AI_STATUS, ARCHIVE_FILE_TYPES, TEXT_EDITABLE_EXTENSIONS } from '@/utils/constants'
 import type { FileItem, QAResponse, VersionItem, SensitiveItem } from '@/api/types'
 
 export const FileDetail = () => {
@@ -34,6 +34,15 @@ export const FileDetail = () => {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState('')
   const [editSaving, setEditSaving] = useState(false)
+  const [showUploadVersionModal, setShowUploadVersionModal] = useState(false)
+  const [uploadVersionFile, setUploadVersionFile] = useState<File | null>(null)
+  const [uploadVersionComment, setUploadVersionComment] = useState('')
+  const [uploadingVersion, setUploadingVersion] = useState(false)
+  const [showTextEditModal, setShowTextEditModal] = useState(false)
+  const [textContent, setTextContent] = useState('')
+  const [textComment, setTextComment] = useState('')
+  const [textContentLoading, setTextContentLoading] = useState(false)
+  const [textSaving, setTextSaving] = useState(false)
   const [diffResult, setDiffResult] = useState<{
     diff: string
     additions: number
@@ -47,6 +56,17 @@ export const FileDetail = () => {
   } | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [compareVersions, setCompareVersions] = useState<{ a: number | null; b: number | null }>({ a: null, b: null })
+  const [unlockedFileKey, setUnlockedFileKey] = useState<string | null>(null)
+  const [showKeyPrompt, setShowKeyPrompt] = useState(false)
+  const [keyPromptInput, setKeyPromptInput] = useState('')
+  const [keyPromptError, setKeyPromptError] = useState('')
+  const [keyPromptLoading, setKeyPromptLoading] = useState(false)
+  const [pendingKeyAction, setPendingKeyAction] = useState<'decrypt' | 'decrypt-download' | 'encrypt' | 'text-edit' | 'upload-version' | 'save-text'>('decrypt')
+  const [pendingUploadVersion, setPendingUploadVersion] = useState<{ file: File; comment: string } | null>(null)
+  const [encryptLoading, setEncryptLoading] = useState(false)
+  const [showEncryptKeyModal, setShowEncryptKeyModal] = useState(false)
+  const [oneTimeKey, setOneTimeKey] = useState<{ fileName: string; key: string } | null>(null)
+  const [copiedKey, setCopiedKey] = useState(false)
 
   const { error, success } = useToast()
 
@@ -84,6 +104,10 @@ export const FileDetail = () => {
   const handleAsk = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!question.trim() || !file) return
+    if (file.encryptionMode === 'CLIENT') {
+      error('端到端加密文件无法进行服务器端智能问答，请先在本地解密')
+      return
+    }
 
     setQaLoading(true)
     try {
@@ -107,17 +131,24 @@ export const FileDetail = () => {
     try {
       await filesApi.delete(file.id)
       success('文件删除成功')
-      navigate('/')
+      navigate('/home')
     } catch (err) {
       error((err as Error).message || '删除文件失败')
     }
   }
 
-  const handleDownload = async () => {
+
+  const runDownload = async (currentKey?: string) => {
     if (!file) return
     try {
-      const response: Blob = await filesApi.download(file.id) as unknown as Blob
-      const url = window.URL.createObjectURL(new Blob([response]))
+      const response = await filesApi.download(file.id) as unknown as Blob
+      let bytes = new Uint8Array(await response.arrayBuffer())
+      if (file.encryptionMode === 'CLIENT') {
+        const key = currentKey || unlockedFileKey
+        if (!key) throw new Error('请输入该文件的密钥')
+        bytes = await decryptBlobWithFileKey(bytes, key)
+      }
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: file.mimeType }))
       const a = document.createElement('a')
       a.href = url
       a.download = file.name
@@ -130,6 +161,100 @@ export const FileDetail = () => {
       error((err as Error).message || '下载失败')
     }
   }
+
+  const openKeyPrompt = (action: 'decrypt' | 'decrypt-download' | 'encrypt' | 'text-edit' | 'upload-version' | 'save-text') => {
+    setPendingKeyAction(action)
+    setKeyPromptInput('')
+    setKeyPromptError('')
+    setShowKeyPrompt(true)
+  }
+
+  const handleDecrypt = async () => {
+    if (!file) return
+    if (file.encryptionMode !== 'CLIENT') return
+    setPendingUploadVersion(null)
+    openKeyPrompt('decrypt')
+  }
+
+  const handleDownload = async () => {
+    if (!file) return
+    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+      error('文件仍处于加密状态，请先点击“解密”输入文件密钥')
+      return
+    }
+    await runDownload()
+  }
+
+  const handleEncryptFile = async () => {
+    if (!file) return
+    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+      if (!confirm(`确定要重新加密文件 ${file.name} 吗？重新加密需要先输入当前密钥。`)) return
+      setPendingUploadVersion(null)
+      openKeyPrompt('encrypt')
+      return
+    }
+    if (!confirm(`确定要${file.encryptionMode === 'CLIENT' ? '重新加密' : '加密'}文件 ${file.name} 吗？`)) return
+    await runEncryptFile()
+  }
+
+  const runEncryptFile = async (currentKey?: string) => {
+    if (!file) return
+    setEncryptLoading(true)
+    try {
+      const blob = await filesApi.download(file.id) as unknown as Blob
+      let plain = new Uint8Array(await blob.arrayBuffer())
+      if (file.encryptionMode === 'CLIENT') {
+        const key = currentKey || unlockedFileKey
+        if (!key) throw new Error('请先解密该文件，再使用新密钥重新加密')
+        plain = await decryptBlobWithFileKey(plain, key)
+      }
+      const fileKey = await generateFileKey()
+      const encryptedData = await encryptBlobWithFileKey(plain, fileKey)
+      const encryptedFile = new File([encryptedData], file.name, { type: file.mimeType })
+      const comment = file.encryptionMode === 'CLIENT' ? '重新加密' : '端到端加密'
+      const updated = await filesApi.uploadVersion(file.id, encryptedFile, comment, undefined, true)
+      setFile(updated)
+      await fetchVersionHistory(file.id)
+      setUnlockedFileKey(null)
+      setOneTimeKey({ fileName: file.name, key: fileKey.base64 })
+      setCopiedKey(false)
+      setShowEncryptKeyModal(true)
+      success('文件已使用新的独立密钥完成加密，请立即保存密钥')
+    } catch (err) {
+      error((err as Error).message || '加密失败')
+    } finally {
+      setEncryptLoading(false)
+    }
+  }
+
+  const handleCopyOneTimeKey = async () => {
+    if (!oneTimeKey) return
+    await navigator.clipboard.writeText(oneTimeKey.key)
+    setCopiedKey(true)
+    setTimeout(() => setCopiedKey(false), 2000)
+  }
+
+  const handleDownloadOneTimeKey = () => {
+    if (!oneTimeKey) return
+    const content = [
+      'NebulaMind 文件密钥备份',
+      '请妥善保管以下密钥，服务器不会保存。密钥只在加密时显示一次，丢失后文件无法解密。',
+      '',
+      `文件名: ${oneTimeKey.fileName}`,
+      `文件密钥: ${oneTimeKey.key}`,
+    ].join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'nebulamind-file-keys.txt'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+
+
 
   const handleEdit = () => {
     if (!file) return
@@ -154,6 +279,10 @@ export const FileDetail = () => {
 
   const handleDetectSecurity = async () => {
     if (!file) return
+    if (file.encryptionMode === 'CLIENT') {
+      error('端到端加密文件无法进行服务器端敏感检测，请先在本地解密后上传普通文件')
+      return
+    }
     setSecurityLoading(true)
     setSecurityItems([])
     try {
@@ -173,21 +302,18 @@ export const FileDetail = () => {
     }
   }
 
-  const handleApplyTag = async (tag: string) => {
+  const handleRemoveTag = async (tag: string) => {
     if (!file) return
     try {
       let currentTags: string[] = []
       try { currentTags = JSON.parse(file.tags || '[]') } catch { currentTags = [] }
       if (!Array.isArray(currentTags)) currentTags = []
-      if (!currentTags.includes(tag)) {
-        currentTags.push(tag)
-        const newTags = JSON.stringify(currentTags)
-        await filesApi.update(file.id, { tags: newTags })
-        setFile((prev) => prev ? { ...prev, tags: newTags } : null)
-        success(`标签 "${tag}" 已应用`)
-      }
+      const newTags = JSON.stringify(currentTags.filter((t) => t !== tag))
+      await filesApi.update(file.id, { tags: newTags })
+      setFile((prev) => prev ? { ...prev, tags: newTags } : null)
+      success(`标签 "${tag}" 已移除`)
     } catch (err) {
-      error((err as Error).message || '应用标签失败')
+      error((err as Error).message || '移除标签失败')
     }
   }
 
@@ -195,6 +321,10 @@ export const FileDetail = () => {
     if (!file) return
     if (ARCHIVE_FILE_TYPES.includes(file.fileType?.toLowerCase())) {
       error('压缩包不支持直接生成摘要，请先解压后上传文件再试')
+      return
+    }
+    if (file.encryptionMode === 'CLIENT') {
+      error('端到端加密文件无法进行服务器端 AI 摘要，请先在本地解密')
       return
     }
     setSummaryLoading(true)
@@ -217,6 +347,10 @@ export const FileDetail = () => {
 
   const handleClassify = async () => {
     if (!file) return
+    if (file.encryptionMode === 'CLIENT') {
+      error('端到端加密文件无法进行服务器端 AI 分类，请先在本地解密')
+      return
+    }
     setClassifyLoading(true)
     try {
       const response = await filesApi.classify(file.id)
@@ -236,10 +370,9 @@ export const FileDetail = () => {
   const handleRestoreVersion = async (version: VersionItem) => {
     if (!file || !confirm(`确定要将文件恢复到版本 ${version.version} 吗？`)) return
     try {
-      await filesApi.restoreVersion(file.id, version.version)
-      setFile((prev) => prev ? { ...prev, version: version.version } : null)
-      fetchVersionHistory(file.id)
-      success(`文件已恢复到版本 ${version.version}`)
+      const result = await filesApi.restoreVersion(file.id, version.version)
+      success(result.message || `文件已恢复到版本 ${version.version}`)
+      await Promise.all([fetchFileDetail(file.id), fetchVersionHistory(file.id)])
     } catch (err) {
       error((err as Error).message || '恢复失败')
     }
@@ -284,6 +417,169 @@ export const FileDetail = () => {
     }
   }
 
+  const isTextEditable = (target: FileItem) => {
+    const name = target.name?.toLowerCase() || ''
+    const dot = name.lastIndexOf('.')
+    const extension = dot >= 0 && dot < name.length - 1 ? name.slice(dot + 1) : ''
+    return TEXT_EDITABLE_EXTENSIONS.includes(extension) || TEXT_EDITABLE_EXTENSIONS.includes(target.fileType?.toLowerCase() || '')
+  }
+
+  const handleOpenUploadVersion = () => {
+    setUploadVersionFile(null)
+    setUploadVersionComment('')
+    setShowUploadVersionModal(true)
+  }
+
+  const handleUploadVersion = async () => {
+    if (!file || !uploadVersionFile) {
+      error('请选择要上传的新版本文件')
+      return
+    }
+    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+      setPendingUploadVersion({ file: uploadVersionFile, comment: uploadVersionComment.trim() })
+      openKeyPrompt('upload-version')
+      return
+    }
+    await runUploadVersion(uploadVersionFile, uploadVersionComment.trim())
+  }
+
+  const runUploadVersion = async (target: File, comment: string, currentKey?: string) => {
+    if (!file) return
+    setUploadingVersion(true)
+    try {
+      let uploadTarget: File = target
+      let encrypted = false
+      if (file.encryptionMode === 'CLIENT') {
+        const key = currentKey || unlockedFileKey
+        if (!key) throw new Error('请输入该文件的密钥')
+        const plain = new Uint8Array(await target.arrayBuffer())
+        const encryptedData = await encryptBlobWithKeyBase64(plain, key)
+        uploadTarget = new File([encryptedData], target.name, { type: target.type || file.mimeType })
+        encrypted = true
+      }
+      const updated = await filesApi.uploadVersion(file.id, uploadTarget, comment, undefined, encrypted)
+      setFile(updated)
+      await fetchVersionHistory(file.id)
+      setShowUploadVersionModal(false)
+      setUploadVersionFile(null)
+      setUploadVersionComment('')
+      setPendingUploadVersion(null)
+      success('新版本上传成功')
+    } catch (err) {
+      error((err as Error).message || '新版本上传失败')
+    } finally {
+      setUploadingVersion(false)
+    }
+  }
+
+  const handleOpenTextEdit = async () => {
+    if (!file) return
+    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+      setPendingUploadVersion(null)
+      openKeyPrompt('text-edit')
+      return
+    }
+    await runOpenTextEdit()
+  }
+
+  const runOpenTextEdit = async (currentKey?: string) => {
+    if (!file) return
+    setTextContentLoading(true)
+    try {
+      const blob = await filesApi.download(file.id) as unknown as Blob
+      const bytes = new Uint8Array(await blob.arrayBuffer())
+      const key = currentKey || unlockedFileKey
+      const content = file.encryptionMode === 'CLIENT'
+        ? decodeText(await decryptBlobWithFileKey(bytes, key || ''))
+        : await blob.text()
+      setTextContent(content)
+      setTextComment('')
+      setShowTextEditModal(true)
+    } catch (err) {
+      error((err as Error).message || '读取文件内容失败')
+    } finally {
+      setTextContentLoading(false)
+    }
+  }
+
+  const handleSaveTextVersion = async () => {
+    if (!file || !textContent.trim()) {
+      error('文件内容不能为空')
+      return
+    }
+    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+      setPendingUploadVersion(null)
+      openKeyPrompt('save-text')
+      return
+    }
+    await runSaveTextVersion(textContent, textComment.trim())
+  }
+
+  const runSaveTextVersion = async (content: string, comment: string, currentKey?: string) => {
+    if (!file) return
+    setTextSaving(true)
+    try {
+      let updated
+      if (file.encryptionMode === 'CLIENT') {
+        const key = currentKey || unlockedFileKey
+        if (!key) throw new Error('请输入该文件的密钥')
+        const encryptedData = await encryptBlobWithKeyBase64(encodeText(content), key)
+        const encryptedFile = new File([encryptedData], file.name, { type: file.mimeType })
+        updated = await filesApi.uploadVersion(file.id, encryptedFile, comment, undefined, true)
+      } else {
+        updated = await filesApi.saveTextVersion(file.id, content, comment)
+      }
+      setFile(updated)
+      await fetchVersionHistory(file.id)
+      setShowTextEditModal(false)
+      success('在线编辑已保存为新版本')
+    } catch (err) {
+      error((err as Error).message || '保存新版本失败')
+    } finally {
+      setTextSaving(false)
+    }
+  }
+
+  const handleConfirmKeyPrompt = async () => {
+    const key = keyPromptInput.trim()
+    if (!key) {
+      setKeyPromptError('请输入文件密钥')
+      return
+    }
+    if (!file) return
+    setKeyPromptLoading(true)
+    try {
+      const blob = await filesApi.download(file.id) as unknown as Blob
+      const bytes = new Uint8Array(await blob.arrayBuffer())
+      if (file.encryptionMode === 'CLIENT') {
+        await decryptBlobWithFileKey(bytes, key)
+      }
+      setUnlockedFileKey(key)
+      setKeyPromptInput('')
+      setKeyPromptError('')
+      setShowKeyPrompt(false)
+      if (pendingKeyAction === 'decrypt') {
+        success('文件解密成功，可点击“下载”保存明文文件')
+      } else if (pendingKeyAction === 'decrypt-download') {
+        await runDownload(key)
+      } else if (pendingKeyAction === 'text-edit') {
+        await runOpenTextEdit(key)
+      } else if (pendingKeyAction === 'upload-version') {
+        if (pendingUploadVersion) {
+          await runUploadVersion(pendingUploadVersion.file, pendingUploadVersion.comment, key)
+        }
+      } else if (pendingKeyAction === 'save-text') {
+        await runSaveTextVersion(textContent, textComment.trim(), key)
+      } else if (pendingKeyAction === 'encrypt') {
+        await runEncryptFile(key)
+      }
+    } catch (err) {
+      setKeyPromptError((err as Error).message || '文件密钥不正确')
+    } finally {
+      setKeyPromptLoading(false)
+    }
+  }
+
   if (loading) {
     return <Loading text="加载文件详情..." />
   }
@@ -305,7 +601,7 @@ export const FileDetail = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/home')}
             className="p-2 rounded-button hover:bg-neutral-100 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 text-text-secondary" />
@@ -320,13 +616,26 @@ export const FileDetail = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+            {file.encryptionMode === 'CLIENT' && !unlockedFileKey && (
+            <Button variant="outline" onClick={handleDecrypt}>
+              <Unlock className="h-4 w-4 mr-2" />
+              解密
+            </Button>
+          )}
           <Button variant="ghost" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />
             下载
+            {file.encryptionMode === 'CLIENT' && unlockedFileKey && (
+              <span className="ml-2 px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 text-xs">已解密</span>
+            )}
+          </Button>
+          <Button variant="outline" onClick={handleEncryptFile} loading={encryptLoading}>
+            <Lock className="h-4 w-4 mr-2" />
+            {file.encryptionMode === 'CLIENT' ? '重新加密' : '加密'}
           </Button>
           <Button variant="ghost" onClick={handleEdit}>
             <Edit3 className="h-4 w-4 mr-2" />
-            编辑
+            重命名
           </Button>
           <Button variant="danger" onClick={handleDelete}>
             <Trash2 className="h-4 w-4 mr-2" />
@@ -470,6 +779,20 @@ export const FileDetail = () => {
             </CardHeader>
             {expandedSections.version && (
               <CardBody>
+                <div className="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b border-neutral-100">
+                  <Button variant="outline" size="sm" onClick={handleOpenUploadVersion} disabled={uploadingVersion}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    上传新版本
+                  </Button>
+                  {isTextEditable(file) ? (
+                    <Button variant="outline" size="sm" onClick={handleOpenTextEdit} disabled={textContentLoading}>
+                      <Edit3 className="h-4 w-4 mr-2" />
+                      {textContentLoading ? '读取中...' : '在线编辑'}
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-text-secondary">该格式不支持在线编辑，请下载后在本地修改并上传新版本</p>
+                  )}
+                </div>
                 {versionsLoading ? (
                   <Loading text="加载版本历史..." />
                 ) : versions.length > 0 ? (
@@ -482,7 +805,12 @@ export const FileDetail = () => {
                               <span className="text-sm font-medium text-text-secondary">v{version.version}</span>
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-text-primary">{version.comment || '更新'}</p>
+                              <p className="text-sm font-medium text-text-primary">
+                                {version.comment || '更新'}
+                                {version.version === file.version && (
+                                  <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-blue/10 text-accent-blue text-xs">当前版本</span>
+                                )}
+                              </p>
                               <p className="text-xs text-text-secondary">
                                 {version.modifiedBy?.displayName || '未知用户'} · {formatDateTime(version.createdAt)}
                               </p>
@@ -502,6 +830,7 @@ export const FileDetail = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => handleRestoreVersion(version)}
+                              disabled={version.version === file.version}
                             >
                               <RefreshCw className="h-4 w-4 mr-1" />
                               恢复
@@ -633,7 +962,9 @@ export const FileDetail = () => {
               <div className="flex items-center justify-between">
                 <span className="text-text-secondary">加密状态</span>
                 <span className={file.isEncrypted ? 'text-green-500' : 'text-text-secondary'}>
-                  {file.isEncrypted ? '已加密' : '未加密'}
+                  {file.isEncrypted
+                    ? file.encryptionMode === 'CLIENT' ? '端到端加密（文件密钥）' : '已加密'
+                    : '未加密'}
                 </span>
               </div>
             </CardBody>
@@ -708,9 +1039,9 @@ export const FileDetail = () => {
                   {(JSON.parse(file.tags) as string[]).map((tag) => (
                     <button
                       key={tag}
-                      onClick={(e) => { e.stopPropagation(); handleApplyTag(tag); }}
+                      onClick={(e) => { e.stopPropagation(); handleRemoveTag(tag); }}
                       className="px-2 py-1 bg-accent-blue/10 text-accent-blue text-sm rounded-full flex items-center gap-1 hover:bg-accent-blue/20 cursor-pointer transition-colors"
-                      title="点击应用此标签"
+                      title="点击移除标签"
                     >
                       <Tag className="h-3 w-3" />
                       {tag}
@@ -754,6 +1085,129 @@ export const FileDetail = () => {
             <Button variant="primary" onClick={handleEditSave} loading={editSaving}>
               <Save className="h-4 w-4 mr-2" />
               保存
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showUploadVersionModal} onClose={() => setShowUploadVersionModal(false)} title="上传新版本">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">选择文件</label>
+            <input
+              type="file"
+              onChange={(e) => setUploadVersionFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-text-secondary file:mr-3 file:px-3 file:py-2 file:rounded-button file:border-0 file:bg-primary-50 file:text-primary-500 file:cursor-pointer"
+            />
+            {uploadVersionFile && (
+              <p className="mt-2 text-sm text-text-secondary">已选择：{uploadVersionFile.name}（{formatFileSize(uploadVersionFile.size)}）</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">版本备注</label>
+            <input
+              type="text"
+              value={uploadVersionComment}
+              onChange={(e) => setUploadVersionComment(e.target.value)}
+              className="w-full px-3 py-2 border border-neutral-200 bg-white focus:outline-none focus:border-accent-blue"
+              placeholder="例如：更新了第 3 章内容（选填）"
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setShowUploadVersionModal(false)}>
+              取消
+            </Button>
+            <Button variant="primary" onClick={handleUploadVersion} loading={uploadingVersion} disabled={!uploadVersionFile}>
+              <Upload className="h-4 w-4 mr-2" />
+              上传
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showTextEditModal} onClose={() => setShowTextEditModal(false)} title={`在线编辑 - ${file.name}`} size="lg">
+        <div className="space-y-4">
+          <TextArea
+            label="文件内容"
+            value={textContent}
+            onChange={(e) => setTextContent(e.target.value)}
+            rows={16}
+            className="font-mono"
+            placeholder="在此修改文本内容，保存后会生成新版本"
+          />
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">版本备注</label>
+            <input
+              type="text"
+              value={textComment}
+              onChange={(e) => setTextComment(e.target.value)}
+              className="w-full px-3 py-2 border border-neutral-200 bg-white focus:outline-none focus:border-accent-blue"
+              placeholder="例如：修正错别字（选填）"
+            />
+          </div>
+          <p className="text-xs text-text-secondary">保存后将创建新版本，原版本会保留在版本历史中。</p>
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setShowTextEditModal(false)}>
+              取消
+            </Button>
+            <Button variant="primary" onClick={handleSaveTextVersion} loading={textSaving}>
+              <Save className="h-4 w-4 mr-2" />
+              保存为新版本
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showEncryptKeyModal} onClose={() => setShowEncryptKeyModal(false)} title="文件密钥（仅显示一次）">
+        {oneTimeKey && (
+          <div className="space-y-4">
+            <div className="px-3 py-2 bg-red-50 border border-red-200 text-sm text-red-600">
+              请立即复制并妥善保存该密钥，关闭后将无法再次查看。服务器不会保存密钥，丢失后文件将无法解密。
+            </div>
+            <p className="text-sm font-medium text-text-primary truncate">{oneTimeKey.fileName}</p>
+            <div className="flex items-start gap-2">
+              <code className="flex-1 min-w-0 px-3 py-2 bg-neutral-50 border border-neutral-200 text-xs font-mono break-all">{oneTimeKey.key}</code>
+              <button
+                onClick={handleCopyOneTimeKey}
+                className="px-3 py-2 text-sm bg-accent-blue text-white hover:bg-accent-blue/90 transition-colors flex items-center gap-1 flex-shrink-0"
+              >
+                <Copy className="h-4 w-4" />
+                {copiedKey ? '已复制' : '复制'}
+              </button>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={handleDownloadOneTimeKey}>
+                <Download className="h-4 w-4 mr-2" />
+                下载密钥文件
+              </Button>
+              <Button variant="primary" onClick={() => { setShowEncryptKeyModal(false); setOneTimeKey(null) }}>
+                我已保存密钥
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={showKeyPrompt} onClose={() => { setShowKeyPrompt(false); setPendingUploadVersion(null) }} title="输入文件密钥">
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">该文件使用专属密钥加密，请输入加密上传时显示的密钥。</p>
+          {keyPromptError && (
+            <div className="px-3 py-2 bg-red-50 border border-red-200 text-sm text-red-600">{keyPromptError}</div>
+          )}
+          <input
+            type="text"
+            value={keyPromptInput}
+            onChange={(e) => setKeyPromptInput(e.target.value)}
+            className="w-full px-3 py-2 text-sm font-mono border border-neutral-200 bg-white focus:outline-none focus:border-accent-blue"
+            placeholder="粘贴文件密钥"
+            autoFocus
+          />
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => { setShowKeyPrompt(false); setPendingUploadVersion(null) }}>
+              取消
+            </Button>
+            <Button variant="primary" onClick={handleConfirmKeyPrompt} loading={keyPromptLoading}>
+              确认
             </Button>
           </div>
         </div>

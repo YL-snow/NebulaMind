@@ -5,7 +5,7 @@ import type {
 } from './types'
 
 export const securityApi = {
-  detect: (data: { fileId: string }) => request.post<SecurityDetectResponse>('/security/detect', data),
+  detect: (data: { fileId: string; autoEncrypt?: boolean }) => request.post<SecurityDetectResponse>('/security/detect', data),
 
   encrypt: (data: { fileId: string; reason?: string }) => request.post<SecurityEncryptResponse>('/security/encrypt', data),
 

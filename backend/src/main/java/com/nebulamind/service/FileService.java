@@ -22,6 +22,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -30,6 +31,7 @@ public class FileService {
     private final FileRepository fileRepository;
     private final FileContentRepository fileContentRepository;
     private final UserRepository userRepository;
+    private final FileVersionService fileVersionService;
 
     private final StorageService storageService;
 
@@ -42,11 +44,13 @@ public class FileService {
     public FileService(FileRepository fileRepository,
                        FileContentRepository fileContentRepository,
                        UserRepository userRepository,
-                       StorageService storageService) {
+                       StorageService storageService,
+                       FileVersionService fileVersionService) {
         this.fileRepository = fileRepository;
         this.fileContentRepository = fileContentRepository;
         this.userRepository = userRepository;
         this.storageService = storageService;
+        this.fileVersionService = fileVersionService;
     }
 
     public Page<File> getUserFiles(UUID userId, Pageable pageable) {
@@ -60,6 +64,11 @@ public class FileService {
 
     @Transactional
     public File createFile(com.nebulamind.dto.FileRequest request, UUID userId) {
+        return createFile(request, userId, false);
+    }
+
+    @Transactional
+    public File createFile(com.nebulamind.dto.FileRequest request, UUID userId, boolean skipProcessing) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId.toString()));
 
@@ -93,7 +102,7 @@ public class FileService {
                 .hash(hash)
                 .user(user)
                 .status(File.FileStatus.COMPLETED)
-                .aiStatus(File.AiStatus.PENDING)
+                .aiStatus(skipProcessing ? File.AiStatus.COMPLETED : File.AiStatus.PENDING)
                 .sensitiveLevel(File.SensitiveLevel.NORMAL)
                 .isEncrypted(false)
                 .version(1)
@@ -103,7 +112,9 @@ public class FileService {
         log.info("File created: {}", file.getId());
 
         FileEventDTO event = FileEventDTO.ofUpload(file.getId(), file.getPath(), userId);
-        sendUploadEvent(event);
+        if (!skipProcessing) {
+            sendUploadEvent(event);
+        }
 
         return file;
     }
@@ -150,6 +161,8 @@ public class FileService {
             log.warn("Failed to delete file from storage: {}", file.getPath(), e);
         }
 
+        fileVersionService.deleteVersionsByFileId(id);
+
         fileRepository.delete(file);
         log.info("File deleted: {}", id);
 
@@ -176,6 +189,13 @@ public class FileService {
         return fileRepository.findByHash(hash).stream()
                 .filter(f -> f.getUser().getId().equals(userId))
                 .toList();
+    }
+
+    public Optional<File> findFileByContent(UUID userId, byte[] content) {
+        if (content == null) {
+            return Optional.empty();
+        }
+        return findDuplicateFiles(userId, calculateFileHash(content)).stream().findFirst();
     }
 
     @Transactional

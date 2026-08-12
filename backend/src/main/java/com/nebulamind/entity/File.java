@@ -106,6 +106,10 @@ public class File implements Serializable {
     @Column(name = "encryption_key_id", length = 100)
     private String encryptionKeyId;
 
+    @Column(name = "encryption_mode", nullable = true, length = 20)
+    @Enumerated(EnumType.STRING)
+    private EncryptionMode encryptionMode = EncryptionMode.NONE;
+
     @Column(name = "cloud_drive_file_id", length = 200)
     private String cloudDriveFileId;
 
@@ -129,6 +133,11 @@ public class File implements Serializable {
     }
 
     public enum SensitiveLevel {
+
         NORMAL, LOW, MEDIUM, HIGH
+    }
+
+    public enum EncryptionMode {
+        NONE, SERVER, CLIENT
     }
 }

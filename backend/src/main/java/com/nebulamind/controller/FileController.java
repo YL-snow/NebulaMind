@@ -2,9 +2,11 @@ package com.nebulamind.controller;
 
 import com.nebulamind.dto.*;
 import com.nebulamind.entity.File;
+import com.nebulamind.entity.AuditLog;
 import com.nebulamind.repository.UserRepository;
 import com.nebulamind.service.*;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -58,6 +60,9 @@ public class FileController {
     @Autowired(required = false)
     private LocalStorageService localStorageService;
 
+    @Autowired(required = false)
+    private AuditLogService auditLogService;
+
     public FileController(FileService fileService, UserRepository userRepository) {
         this.fileService = fileService;
         this.userRepository = userRepository;
@@ -86,7 +91,8 @@ public class FileController {
     }
 
     @GetMapping("/{id}/download")
-    public ResponseEntity<Resource> downloadFile(Authentication authentication, @PathVariable UUID id) throws Exception {
+    public ResponseEntity<Resource> downloadFile(Authentication authentication, @PathVariable UUID id,
+            HttpServletRequest httpRequest) throws Exception {
         UUID userId = getUserIdFromAuthentication(authentication);
         InputStream inputStream;
         File file;
@@ -100,8 +106,23 @@ public class FileController {
 
         byte[] content = inputStream.readAllBytes();
 
+        // 记录下载审计（自动解密也算一次下载）
+        if (auditLogService != null) {
+            try {
+                auditLogService.log(userId, AuditLog.Action.DOWNLOAD,
+                        AuditLog.ResourceType.FILE, id.toString(),
+                        String.format("{\"size\":%d,\"encrypted\":%b}", content.length,
+                                Boolean.TRUE.equals(file.getIsEncrypted())),
+                        httpRequest);
+            } catch (Exception logEx) {
+                log.warn("Failed to write audit log for download: {}", logEx.getMessage());
+            }
+        }
+
         // 如果文件已加密，自动解密
-        if (Boolean.TRUE.equals(file.getIsEncrypted()) && file.getEncryptionKeyId() != null) {
+        if (Boolean.TRUE.equals(file.getIsEncrypted())
+                && !File.EncryptionMode.CLIENT.equals(file.getEncryptionMode())
+                && file.getEncryptionKeyId() != null) {
             try {
                 SecretKey fileKey = keyManagementService.unwrapFileKey(file.getEncryptionKeyId(), userId);
                 content = encryptionService.decryptAesGcm(content, fileKey);
@@ -189,7 +210,8 @@ public class FileController {
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<File> uploadFile(Authentication authentication, @RequestParam("file") MultipartFile file) {
+    public ResponseEntity<File> uploadFile(Authentication authentication, @RequestParam("file") MultipartFile file,
+                                                       @RequestParam(value = "encrypted", required = false, defaultValue = "false") boolean encrypted) {
         UUID userId = getUserIdFromAuthentication(authentication);
         
         try {
@@ -202,9 +224,16 @@ public class FileController {
             
             File createdFile;
             if (cachedFileService != null) {
-                createdFile = cachedFileService.createFile(request, userId);
+                createdFile = cachedFileService.createFile(request, userId, encrypted);
             } else {
-                createdFile = fileService.createFile(request, userId);
+                createdFile = fileService.createFile(request, userId, encrypted);
+            }
+            if (encrypted && createdFile != null) {
+                createdFile.setEncryptionMode(File.EncryptionMode.CLIENT);
+                createdFile.setIsEncrypted(true);
+                createdFile.setAiStatus(File.AiStatus.COMPLETED);
+                createdFile.setAiErrorMessage("end-to-end encrypted file, server cannot analyze");
+                createdFile = fileService.saveFile(createdFile);
             }
             return ResponseEntity.ok(createdFile);
         } catch (Exception e) {
@@ -228,6 +257,10 @@ public class FileController {
 
         if (updates.containsKey("name")) {
             file.setName(updates.get("name"));
+        }
+
+        if (updates.containsKey("tags")) {
+            file.setTags(updates.get("tags"));
         }
 
         File saved = fileService.saveFile(file);

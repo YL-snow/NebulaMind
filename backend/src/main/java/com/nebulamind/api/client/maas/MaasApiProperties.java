@@ -33,6 +33,6 @@ public class MaasApiProperties {
     private String visionModel = "YuanjingVL";
 
     /** 视觉模型回退列表（主模型不可用时依次尝试） */
-    private List<String> fallbackVisionModels = List.of("glm-ocr");
+    private List<String> fallbackVisionModels = List.of();
 
 }

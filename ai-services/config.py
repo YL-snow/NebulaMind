@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     openai_base_url: str = 'https://api.openai.com/v1'
     openai_api_key: str = ''
+    maas_doc_parser_url: str = 'https://maas-api.ai-yuanjing.com/openapi/v1/rag/model_parser_file'
     openai_llm_model: str = 'gpt-4o'
     openai_embedding_model: str = 'text-embedding-3-small'
 

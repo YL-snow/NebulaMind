@@ -60,6 +60,9 @@ public class User implements Serializable {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
+    @Column(name = "e2ee_key_blob", columnDefinition = "text")
+    private String e2eeKeyBlob;
+
     public enum Role {
         ADMIN, USER
     }

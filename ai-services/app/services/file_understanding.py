@@ -7,6 +7,9 @@ from app.services.sensitive_detector import sensitive_detector, SensitiveReport
 from app.utils.file_parser import FileParser
 
 logger = logging.getLogger(__name__)
+# MaaS API limit is 5 calls/minute; keep a long summary within that budget.
+LONG_SUMMARY_SINGLE_MAX_CHARS = 30000
+MAP_REDUCE_MAX_CHUNKS = 3
 
 class FileUnderstandingService:
     @staticmethod
@@ -46,11 +49,15 @@ class FileUnderstandingService:
 
     @staticmethod
     def _generate_long_summary(file_id, content, max_length=300):
+        if len(content) <= LONG_SUMMARY_SINGLE_MAX_CHARS:
+            messages = PromptManager.format("summary", content=content, max_length=max_length)
+            r = llm_client.chat(messages, module="file_understanding", file_id=file_id, temperature=0.5, max_tokens=max_length*2)
+            return {"file_id": file_id, "content": r.content, "key_points": FileUnderstandingService._extract_key_points(r.content), "format": "markdown"}
         from app.utils.text_splitter import TextSplitter
         splitter = TextSplitter(max_chunk_size=4000)
-        chunks = splitter.split(content)
+        chunks = splitter.split(content)[:MAP_REDUCE_MAX_CHUNKS]
         summaries = []
-        for chunk in chunks[:8]:
+        for chunk in chunks:
             messages = PromptManager.format("summary", content=chunk["text"][:3000], max_length=150)
             r = llm_client.chat(messages, module="file_understanding", file_id=file_id, temperature=0.5, max_tokens=300)
             summaries.append(r.content)

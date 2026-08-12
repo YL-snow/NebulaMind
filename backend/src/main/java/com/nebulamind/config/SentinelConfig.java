@@ -107,13 +107,6 @@ public class SentinelConfig {
         generatePPTRule.setLimitApp("default");
         rules.add(generatePPTRule);
 
-        FlowRule cloudDriveRule = new FlowRule();
-        cloudDriveRule.setResource("getCloudDriveFileList");
-        cloudDriveRule.setGrade(RuleConstant.FLOW_GRADE_QPS);
-        cloudDriveRule.setCount(30);
-        cloudDriveRule.setLimitApp("default");
-        rules.add(cloudDriveRule);
-
         FlowRuleManager.loadRules(rules);
         log.info("Sentinel flow rules initialized: {}", rules.size());
     }

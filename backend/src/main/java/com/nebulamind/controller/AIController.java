@@ -5,11 +5,10 @@ import com.nebulamind.ai.AiServiceClient;
 import com.nebulamind.entity.File;
 import com.nebulamind.repository.UserRepository;
 import com.nebulamind.service.FileService;
-import com.nebulamind.service.LocalStorageService;
 import com.nebulamind.util.FileTypeDetector;
-import com.nebulamind.service.MinIOService;
+import com.nebulamind.service.StorageService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.Base64;
 
 @Slf4j
 @RestController
@@ -27,19 +27,19 @@ public class AIController {
     private final AiServiceClient aiServiceClient;
     private final FileService fileService;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
+    private final StorageService storageService;
 
-    @Autowired(required = false)
-    private MinIOService minIOService;
-
-    @Autowired(required = false)
-    private LocalStorageService localStorageService;
 
     public AIController(AiServiceClient aiServiceClient, FileService fileService,
-                        UserRepository userRepository) {
+                        UserRepository userRepository, ObjectMapper objectMapper, StorageService storageService) {
         this.aiServiceClient = aiServiceClient;
         this.fileService = fileService;
         this.userRepository = userRepository;
+        this.objectMapper = objectMapper;
+        this.storageService = storageService;
     }
+
 
     @PostMapping("/files/{id}/classify")
     public ResponseEntity<Map<String, Object>> classifyFile(Authentication authentication, @PathVariable UUID id) {
@@ -47,9 +47,9 @@ public class AIController {
         
         try {
             File file = fileService.getFileById(id, userId);
-            
+
             String fileType = FileTypeDetector.normalize(file.getFileType());
-            
+
             // 根据文件类型设置默认分类和标签
             String category = "文档";
             List<String> tags = List.of("文档");
@@ -65,23 +65,26 @@ public class AIController {
                 default: category = "文档"; tags = List.of("文档"); break;
             }
             Double confidence = 0.85;
-            
-            if (minIOService != null || localStorageService != null) {
+
+            boolean clientEncrypted = File.EncryptionMode.CLIENT.equals(file.getEncryptionMode());
+            if (storageService != null && !clientEncrypted) {
                 try {
                     String content = readFileContent(file.getPath());
-                    AiClassifyResponse response = aiServiceClient.classifyFile(id.toString(), content, file.getPath());
+                    String base64 = readFileBase64(file.getPath());
+                    AiClassifyResponse response = aiServiceClient.classifyFile(
+                            id.toString(), content, file.getPath(), base64, fileType);
                     category = response.getCategory();
-                    tags = response.getTags();
+                    tags = response.getTags() != null ? response.getTags() : List.of("文档");
                     confidence = response.getConfidence();
                     
-                    file.setCategory(response.getCategory());
-                    file.setTags(String.join(",", response.getTags()));
+                    file.setCategory(category);
+                    file.setTags(objectMapper.writeValueAsString(tags));
                     fileService.saveFile(file);
                 } catch (Exception e) {
                     log.warn("AI classification failed, using fallback: {}", e.getMessage());
                     // 使用基于文件类型的默认值
                     file.setCategory(category);
-                    file.setTags(String.join(",", tags));
+                    file.setTags(objectMapper.writeValueAsString(tags));
                     fileService.saveFile(file);
                 }
             }
@@ -132,16 +135,18 @@ public class AIController {
     }
 
     private String readFileContent(String path) throws Exception {
+        return new String(readFileBytes(path));
+    }
+
+    private String readFileBase64(String path) throws Exception {
+        return Base64.getEncoder().encodeToString(readFileBytes(path));
+    }
+
+    private byte[] readFileBytes(String path) throws Exception {
         InputStream inputStream;
-        if (minIOService != null) {
-            inputStream = minIOService.downloadFile(path);
-        } else if (localStorageService != null) {
-            inputStream = localStorageService.downloadFile(path);
-        } else {
-            throw new RuntimeException("No storage service available");
-        }
+        inputStream = storageService.downloadFile(path);
         try (inputStream) {
-            return new String(inputStream.readAllBytes());
+            return inputStream.readAllBytes();
         }
     }
 

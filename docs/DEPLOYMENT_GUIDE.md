@@ -19,7 +19,7 @@
 
 - ✅ 基于智能体开发平台及大模型技术构建四大核心模块
 - ✅ 支持对接主流云存储协议（MinIO S3兼容）
-- ✅ 预留联通云盘API对接接口（因个人用户无法获取API凭证）
+- ✅ 支持 S3 兼容存储与 WebDAV 云盘协议对接
 - ✅ 设置数据安全机制，敏感文件自动识别与加密
 - ✅ 支持隐私文件加密存储（AES-256-GCM）
 
@@ -146,7 +146,7 @@ NebulaMind/
 | 版本管理 | [FileVersionService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/FileVersionService.java) | ✅ |
 | MinIO存储 | [MinIOService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/MinIOService.java) | ✅ |
 | 存储服务抽象 | [StorageService.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/service/StorageService.java) | ✅ |
-| 联通云盘接口预留 | [UnicomCloudDriveClient.java](file:///c:/projects/NebulaMind2/NebulaMind/backend/src/main/java/com/nebulamind/api/client/unicom/UnicomCloudDriveClient.java) | ✅ |
+| S3/WebDAV 云盘对接 | [CloudStorageDriveService.java](file:///c:/projects/NebulaMind/backend/src/main/java/com/nebulamind/cloud/CloudStorageDriveService.java) | ✅ |
 
 ### 4.2 前端功能
 
@@ -467,7 +467,7 @@ curl http://localhost:9000/minio/health/live
 
 ### 10.1 功能扩展
 
-1. **联通云盘对接**：获取联通云盘API凭证后，实现 `UnicomCloudDriveClient` 的具体逻辑
+1. **更多网盘接入**：通过 WebDAV 桥接接入百度网盘等，或获取官方开放平台凭证后做原生对接
 2. **移动端App**：开发iOS/Android原生应用或使用Flutter跨端开发
 3. **团队协作**：实现团队空间、共享文件夹、协作编辑功能
 
