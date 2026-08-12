@@ -352,6 +352,8 @@ NebulaMind/
 | [数据库设计文档](/docs/database/数据库ER图文档.md) | docs/database/ | ER 图、表结构、索引策略 |
 | [DDL 脚本](/docs/database/DDL脚本.sql) | docs/database/ | PostgreSQL 建表语句 |
 | [部署指南](/DEPLOYMENT_GUIDE.md) | 根目录 | Docker 部署、ECS 部署、环境变量说明 |
+| [核心流程与状态图](/docs/flow-diagrams.md) | docs/flow-diagrams.md | AI 摘要时序图、问答流程、文件状态机、用户交互流程 |
+| [方案选型记录](/docs/solution-selection.md) | docs/solution-selection.md | 候选方案、评分表、选型结论 |
 
 ---
 
