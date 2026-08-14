@@ -49,6 +49,7 @@ public class AIController {
             File file = fileService.getFileById(id, userId);
 
             String fileType = FileTypeDetector.normalize(file.getFileType());
+            boolean archive = FileTypeDetector.isArchiveFileType(fileType);
 
             // 根据文件类型设置默认分类和标签
             String category = "文档";
@@ -62,12 +63,19 @@ public class AIController {
                 case "jpg": case "jpeg": case "png": case "gif": case "bmp": case "webp": case "tiff": case "image": category = "图片"; tags = List.of("图片"); break;
                 case "ppt": case "pptx": category = "演示文稿"; tags = List.of("演示"); break;
                 case "zip": case "rar": case "7z": category = "压缩文件"; tags = List.of("压缩"); break;
+                case "gz": case "tar": case "bz2": case "xz": case "tgz": category = "压缩文件"; tags = List.of("压缩"); break;
                 default: category = "文档"; tags = List.of("文档"); break;
             }
             Double confidence = 0.85;
 
             boolean clientEncrypted = File.EncryptionMode.CLIENT.equals(file.getEncryptionMode());
-            if (storageService != null && !clientEncrypted) {
+            if (archive) {
+                file.setCategory(category);
+                file.setTags(objectMapper.writeValueAsString(tags));
+                file.setAiStatus(File.AiStatus.SKIPPED);
+                fileService.saveFile(file);
+            }
+            if (storageService != null && !clientEncrypted && !archive) {
                 try {
                     String content = readFileContent(file.getPath());
                     String base64 = readFileBase64(file.getPath());

@@ -158,16 +158,20 @@ public class FileUploadService {
                 .contentType(session.getContentType())
                 .build());
 
+        String fileType = determineFileType(session.getContentType(), session.getFileName());
+        boolean archive = FileTypeDetector.isArchiveFileType(fileType);
         File file = File.builder()
                 .name(session.getFileName())
                 .path(objectName)
                 .size(session.getFileSize())
                 .mimeType(session.getContentType())
-                .fileType(determineFileType(session.getContentType(), session.getFileName()))
+                .fileType(fileType)
                 .hash(session.getFileHash())
                 .user(user)
                 .status(File.FileStatus.COMPLETED)
-                .aiStatus(File.AiStatus.PENDING)
+                .aiStatus(archive ? File.AiStatus.SKIPPED : File.AiStatus.PENDING)
+                .category(archive ? "压缩文件" : null)
+                .tags(archive ? "[\"压缩\"]" : null)
                 .sensitiveLevel(File.SensitiveLevel.NORMAL)
                 .isEncrypted(false)
                 .version(1)
@@ -180,8 +184,10 @@ public class FileUploadService {
         uploadSessions.remove(uploadId);
 
         FileEventDTO event = FileEventDTO.ofUpload(file.getId(), objectName, session.getUserId());
-        rabbitMQMessageService.sendFileUploadEvent(event);
-        log.info("File upload event sent for file {}", file.getId());
+        if (!archive) {
+            rabbitMQMessageService.sendFileUploadEvent(event);
+            log.info("File upload event sent for file {}", file.getId());
+        }
 
         return buildResponse(uploadId, session.getTotalChunks() - 1, session.getTotalChunks(), true, "Upload completed");
     }

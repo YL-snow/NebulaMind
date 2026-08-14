@@ -9,6 +9,7 @@ import com.nebulamind.entity.File;
 import com.nebulamind.repository.UserRepository;
 import com.nebulamind.service.FileService;
 import com.nebulamind.service.StorageService;
+import com.nebulamind.util.FileTypeDetector;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -48,10 +49,6 @@ public class GenerateController {
     );
     private static final Set<String> IMAGE_EXTENSIONS = IMAGE_MIME_TYPES.keySet();
 
-    /** 压缩包扩展名：AI 无法直接读取，需提示先解压 */
-    private static final Set<String> ARCHIVE_EXTENSIONS = Set.of(
-            "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "tgz"
-    );
 
     public GenerateController(AiServiceClient aiServiceClient, MaasApiClient maasApiClient,
                                FileService fileService, UserRepository userRepository,
@@ -243,6 +240,16 @@ public class GenerateController {
                 return handleImageReport(selectedFiles, topic, userId);
             }
 
+            boolean hasArchive = selectedFiles.stream().anyMatch(this::isArchiveFile);
+            if (hasArchive && request.getFileIds() != null && !request.getFileIds().isEmpty()) {
+                return ResponseEntity.ok(archiveUnsupportedResponse(null, "报告生成"));
+            }
+            selectedFiles = selectedFiles.stream().filter(f -> !isArchiveFile(f)).collect(Collectors.toList());
+            fileIds = selectedFiles.stream().map(f -> f.getId().toString()).collect(Collectors.toList());
+            if (selectedFiles.isEmpty()) {
+                return ResponseEntity.ok(archiveUnsupportedResponse(null, "报告生成"));
+            }
+
             List<File> analyzableFiles = selectedFiles.stream()
                     .filter(f -> !isClientEncrypted(f))
                     .collect(Collectors.toList());
@@ -267,7 +274,6 @@ public class GenerateController {
                     log.warn("Failed to read content for report, file={}: {}", f.getId(), ex.getMessage());
                 }
             }
-
             AiGenerateResponse response = aiServiceClient.generateReport(fileIds, topic, contents, filePaths, fileBases64);
             if (isRateLimited(response.getContent())) {
                 return ResponseEntity.ok(rateLimitResponse(null));
@@ -320,6 +326,16 @@ public class GenerateController {
                 return handleImagePPT(selectedFiles, topic, userId);
             }
 
+            boolean hasArchive = selectedFiles.stream().anyMatch(this::isArchiveFile);
+            if (hasArchive && request.getFileIds() != null && !request.getFileIds().isEmpty()) {
+                return ResponseEntity.ok(archiveUnsupportedResponse(null, "PPT生成"));
+            }
+            selectedFiles = selectedFiles.stream().filter(f -> !isArchiveFile(f)).collect(Collectors.toList());
+            fileIds = selectedFiles.stream().map(f -> f.getId().toString()).collect(Collectors.toList());
+            if (selectedFiles.isEmpty()) {
+                return ResponseEntity.ok(archiveUnsupportedResponse(null, "PPT生成"));
+            }
+
             List<File> analyzableFiles = selectedFiles.stream()
                     .filter(f -> !isClientEncrypted(f))
                     .collect(Collectors.toList());
@@ -344,7 +360,6 @@ public class GenerateController {
                     log.warn("Failed to read content for PPT, file={}: {}", f.getId(), ex.getMessage());
                 }
             }
-
             AiGenerateResponse response = aiServiceClient.generatePPT(fileIds, topic, contents, filePaths, fileBases64);
             if (isRateLimited(response.getContent())) {
                 return ResponseEntity.ok(rateLimitResponse(null));
@@ -377,6 +392,9 @@ public class GenerateController {
             if (isClientEncrypted(file)) {
                 return ResponseEntity.ok(e2eeUnsupportedResponse(request.getFileId(), "格式转换"));
             }
+            if (isArchiveFile(file)) {
+                return ResponseEntity.ok(archiveUnsupportedResponse(request.getFileId(), "格式转换"));
+            }
             String content = readFileContent(file.getPath());
             String targetFormat = request.getTargetFormat() != null ? request.getTargetFormat() : "docx";
 
@@ -404,7 +422,7 @@ public class GenerateController {
     }
 
     private boolean isArchiveFile(File file) {
-        return file.getFileType() != null && ARCHIVE_EXTENSIONS.contains(file.getFileType().toLowerCase());
+        return FileTypeDetector.isArchiveFileType(file.getFileType());
     }
 
     private boolean isClientEncrypted(File file) {

@@ -494,7 +494,7 @@ public class FileVersionService {
         file.setMimeType(newMimeType);
         file.setFileType(newFileType);
         file.setSummary(null);
-        file.setAiStatus(File.AiStatus.PENDING);
+        file.setAiStatus(FileTypeDetector.isArchiveFileType(newFileType) ? File.AiStatus.SKIPPED : File.AiStatus.PENDING);
         file.setSensitiveLevel(File.SensitiveLevel.NORMAL);
         if (clientEncrypted) {
             file.setEncryptionMode(File.EncryptionMode.CLIENT);

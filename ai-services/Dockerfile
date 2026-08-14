@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -i ht
 COPY . .
 RUN mkdir -p logs
 EXPOSE 8081
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081", "--workers", "2"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081", "--workers", "1"]

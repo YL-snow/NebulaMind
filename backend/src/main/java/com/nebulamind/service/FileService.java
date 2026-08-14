@@ -102,16 +102,20 @@ public class FileService {
             throw new RuntimeException("File upload failed", e);
         }
 
+        String fileType = determineFileType(request.getMimeType(), request.getName());
+        boolean archive = FileTypeDetector.isArchiveFileType(fileType);
         File file = File.builder()
                 .name(request.getName())
                 .path(objectName)
                 .size(request.getSize())
                 .mimeType(request.getMimeType())
-                .fileType(determineFileType(request.getMimeType(), request.getName()))
+                .fileType(fileType)
                 .hash(hash)
                 .user(user)
                 .status(File.FileStatus.COMPLETED)
-                .aiStatus(skipProcessing ? File.AiStatus.COMPLETED : File.AiStatus.PENDING)
+                .aiStatus(archive ? File.AiStatus.SKIPPED : (skipProcessing ? File.AiStatus.COMPLETED : File.AiStatus.PENDING))
+                .category(archive ? "压缩文件" : null)
+                .tags(archive ? "[\"压缩\"]" : null)
                 .sensitiveLevel(File.SensitiveLevel.NORMAL)
                 .isEncrypted(false)
                 .version(1)
@@ -121,7 +125,7 @@ public class FileService {
         log.info("File created: {}", file.getId());
 
         FileEventDTO event = FileEventDTO.ofUpload(file.getId(), file.getPath(), userId);
-        if (!skipProcessing) {
+        if (!skipProcessing && !archive) {
             sendAfterCommit(() -> sendUploadEvent(event));
         }
 

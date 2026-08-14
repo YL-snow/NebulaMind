@@ -6,7 +6,7 @@ import { Card, CardHeader, CardBody } from '@/components/common/Card'
 import { useToast } from '@/components/common/Toast'
 import { generateApi } from '@/api/generate'
 import { useFileStore } from '@/stores/fileStore'
-import { GENERATE_STYLES, SUMMARY_STYLES, EXTRACT_TYPES, REPORT_TYPES } from '@/utils/constants'
+import { GENERATE_STYLES, SUMMARY_STYLES, EXTRACT_TYPES, REPORT_TYPES, ARCHIVE_FILE_TYPES } from '@/utils/constants'
 import { formatFileSize } from '@/utils/format'
 
 export const Generate = () => {
@@ -37,6 +37,12 @@ export const Generate = () => {
   const handleGenerate = async () => {
     if (selectedFiles.length === 0) {
       error('请选择至少一个文件')
+      return
+    }
+
+    const selectedItems = files.filter((file) => selectedFiles.includes(file.id))
+    if (selectedItems.some((file) => ARCHIVE_FILE_TYPES.includes(file.fileType?.toLowerCase()))) {
+      error('压缩包不支持直接使用 AI 生成，请先解压后上传文件再试')
       return
     }
 

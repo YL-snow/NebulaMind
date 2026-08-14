@@ -32,7 +32,7 @@ export interface FileItem {
   isEncrypted: boolean
   encryptionKeyId?: string
   encryptionMode?: 'NONE' | 'SERVER' | 'CLIENT'
-  aiStatus: 'pending' | 'processing' | 'completed' | 'failed'
+  aiStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped'
   version: number
   createdAt: string
   updatedAt: string
@@ -218,6 +218,7 @@ export interface SecurityDetectResponse {
   scannedAt: string
   detectionMethod: string
   warning?: string
+  message?: string
   autoEncrypted: boolean
 }
 

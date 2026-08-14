@@ -111,12 +111,14 @@ export const FileCard = ({ file, onClick, onDownload, onDelete }: FileCardProps)
             <span>AI处理</span>
             <span style={{ color: aiStatus.color }}>{aiStatus.label}</span>
           </div>
-          <div className="w-full bg-neutral-100 h-1 mt-1">
-            <div
-              className="bg-accent-blue h-1 transition-all duration-300"
-              style={{ width: file.aiStatus === 'processing' ? '50%' : '0%' }}
-            />
-          </div>
+          {file.aiStatus === 'processing' && (
+            <div className="w-full bg-neutral-100 h-1 mt-1">
+              <div
+                className="bg-accent-blue h-1 transition-all duration-300"
+                style={{ width: '50%' }}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

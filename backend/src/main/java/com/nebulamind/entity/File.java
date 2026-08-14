@@ -132,7 +132,7 @@ public class File implements Serializable {
     }
 
     public enum AiStatus {
-        PENDING, PROCESSING, COMPLETED, FAILED
+        PENDING, PROCESSING, COMPLETED, FAILED, SKIPPED
     }
 
     public enum SensitiveLevel {

@@ -104,6 +104,10 @@ export const FileDetail = () => {
   const handleAsk = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!question.trim() || !file) return
+    if (ARCHIVE_FILE_TYPES.includes(file.fileType?.toLowerCase())) {
+      error('压缩包不支持直接进行智能问答，请先解压后上传文件再试')
+      return
+    }
     if (file.encryptionMode === 'CLIENT') {
       error('端到端加密文件无法进行服务器端智能问答，请先在本地解密')
       return
@@ -279,6 +283,10 @@ export const FileDetail = () => {
 
   const handleDetectSecurity = async () => {
     if (!file) return
+    if (ARCHIVE_FILE_TYPES.includes(file.fileType?.toLowerCase())) {
+      error('压缩包不支持直接进行安全检测，请先解压后上传文件再试')
+      return
+    }
     if (file.encryptionMode === 'CLIENT') {
       error('端到端加密文件无法进行服务器端敏感检测，请先在本地解密后上传普通文件')
       return
@@ -288,6 +296,10 @@ export const FileDetail = () => {
     try {
       const response = await securityApi.detect({ fileId: file.id })
       setFile((prev) => prev ? { ...prev, sensitiveLevel: response.sensitiveLevel } : null)
+      if (response.warning || response.message) {
+        error(response.warning || response.message || '安全检测跳过')
+        return
+      }
       if (response.sensitiveItems && response.sensitiveItems.length > 0) {
         setSecurityItems(response.sensitiveItems)
         success(`安全检测完成，发现 ${response.sensitiveItems.length} 处敏感内容`)
@@ -347,6 +359,10 @@ export const FileDetail = () => {
 
   const handleClassify = async () => {
     if (!file) return
+    if (ARCHIVE_FILE_TYPES.includes(file.fileType?.toLowerCase())) {
+      error('压缩包不支持直接进行 AI 分类，请先解压后上传文件再试')
+      return
+    }
     if (file.encryptionMode === 'CLIENT') {
       error('端到端加密文件无法进行服务器端 AI 分类，请先在本地解密')
       return
@@ -591,6 +607,7 @@ export const FileDetail = () => {
   const fileType = FILE_TYPES[file.fileType as keyof typeof FILE_TYPES] || FILE_TYPES.default
   const sensitiveLevel = SENSITIVE_LEVELS[file.sensitiveLevel?.toLowerCase() as keyof typeof SENSITIVE_LEVELS] || SENSITIVE_LEVELS.normal
   const aiStatus = AI_STATUS[file.aiStatus?.toLowerCase() as keyof typeof AI_STATUS] || AI_STATUS.pending
+  const isArchiveFile = ARCHIVE_FILE_TYPES.includes(file.fileType?.toLowerCase())
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
@@ -703,7 +720,11 @@ export const FileDetail = () => {
             </CardHeader>
             {expandedSections.summary && (
               <CardBody>
-                {file.summary ? (
+                {isArchiveFile ? (
+                  <div className="text-center py-4">
+                    <p className="text-text-secondary">压缩包不支持直接生成摘要，请先解压后上传文件再试。</p>
+                  </div>
+                ) : file.summary ? (
                   <div>
                     <p className="text-neutral-700 leading-relaxed mb-4">{file.summary}</p>
                     <Button variant="outline" size="sm" onClick={handleGenerateSummary} loading={summaryLoading}>

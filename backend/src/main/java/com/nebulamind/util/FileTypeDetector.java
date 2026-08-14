@@ -2,6 +2,7 @@ package com.nebulamind.util;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public final class FileTypeDetector {
 
@@ -27,11 +28,22 @@ public final class FileTypeDetector {
             Map.entry("7z", "7z"),
             Map.entry("gz", "gz"),
             Map.entry("tar", "tar"),
+            Map.entry("bz2", "bz2"),
+            Map.entry("xz", "xz"),
+            Map.entry("tgz", "tgz"),
             Map.entry("txt", "txt"),
             Map.entry("md", "md")
     );
 
+    private static final Set<String> ARCHIVE_TYPES = Set.of(
+            "zip", "rar", "7z", "gz", "tar", "bz2", "xz", "tgz", "archive"
+    );
+
     private FileTypeDetector() {
+    }
+
+    public static boolean isArchiveFileType(String fileType) {
+        return fileType != null && ARCHIVE_TYPES.contains(fileType.toLowerCase(Locale.ROOT));
     }
 
     public static String detect(String mimeType, String fileName) {

@@ -26,12 +26,15 @@ export const FILE_TYPES = {
   '7z': { icon: 'Archive', label: '压缩文件', color: '#6366f1' },
   gz: { icon: 'Archive', label: '压缩文件', color: '#6366f1' },
   tar: { icon: 'Archive', label: '压缩文件', color: '#6366f1' },
+  bz2: { icon: 'Archive', label: '压缩文件', color: '#6366f1' },
+  xz: { icon: 'Archive', label: '压缩文件', color: '#6366f1' },
+  tgz: { icon: 'Archive', label: '压缩文件', color: '#6366f1' },
   archive: { icon: 'Archive', label: '压缩文件', color: '#6366f1' },
   document: { icon: 'File', label: '文档', color: '#6b7280' },
   default: { icon: 'File', label: '其他文件', color: '#6b7280' },
 }
 
-export const ARCHIVE_FILE_TYPES = ['zip', 'rar', '7z', 'gz', 'tar', 'archive']
+export const ARCHIVE_FILE_TYPES = ['zip', 'rar', '7z', 'gz', 'tar', 'bz2', 'xz', 'tgz', 'archive']
 
 export const TEXT_EDITABLE_EXTENSIONS = [
   'txt', 'md', 'markdown', 'log', 'csv', 'json', 'xml', 'yml', 'yaml',
@@ -52,6 +55,7 @@ export const AI_STATUS = {
   processing: { label: '处理中', color: '#3b82f6' },
   completed: { label: '已完成', color: '#22c55e' },
   failed: { label: '失败', color: '#ef4444' },
+  skipped: { label: '需先解压', color: '#6366f1' },
 }
 
 export const REPORT_TYPES = [

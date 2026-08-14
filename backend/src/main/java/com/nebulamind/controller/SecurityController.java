@@ -93,6 +93,18 @@ public class SecurityController {
                 e2eeResponse.put("warning", "该文件已开启端到端加密，服务器无法读取内容进行敏感检测，请在本地解密后检测。");
                 return ResponseEntity.ok(e2eeResponse);
             }
+            if (FileTypeDetector.isArchiveFileType(fileType)) {
+                Map<String, Object> archiveResponse = new HashMap<>();
+                archiveResponse.put("fileId", fileId);
+                archiveResponse.put("sensitiveLevel", "normal");
+                archiveResponse.put("sensitiveItems", List.of());
+                archiveResponse.put("scannedAt", LocalDateTime.now().toString());
+                archiveResponse.put("detectionMethod", "archive_skipped");
+                archiveResponse.put("autoEncrypted", false);
+                archiveResponse.put("message", "压缩包不支持直接进行AI检测，请先解压后上传文件再试。");
+                archiveResponse.put("warning", "压缩包不支持直接进行AI检测，请先解压后上传文件再试。");
+                return ResponseEntity.ok(archiveResponse);
+            }
             byte[] plainBytes = readPlainFileBytes(file, userId);
             String content = isBinaryFileType(fileType) ? "" : new String(plainBytes);
 
