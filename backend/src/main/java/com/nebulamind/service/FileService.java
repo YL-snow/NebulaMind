@@ -226,13 +226,15 @@ public class FileService {
             file.setTags(normalizeTags(request.getTags()));
         }
         if (request.getSummary() != null) {
-            FileContent content = FileContent.builder()
-                    .file(file)
-                    .chunkContent(request.getSummary())
-                    .chunkIndex(0)
-                    .charCount(request.getSummary().length())
-                    .tokenCount((int) Math.ceil(request.getSummary().length() / 4.0))
-                    .build();
+            File fileForContent = file;
+            FileContent content = fileContentRepository.findByFileIdAndChunkIndex(file.getId(), 0)
+                    .orElseGet(() -> FileContent.builder()
+                            .file(fileForContent)
+                            .chunkIndex(0)
+                            .build());
+            content.setChunkContent(request.getSummary());
+            content.setCharCount(request.getSummary().length());
+            content.setTokenCount((int) Math.ceil(request.getSummary().length() / 4.0));
             fileContentRepository.save(content);
         }
         if (request.getSensitiveLevel() != null) {
