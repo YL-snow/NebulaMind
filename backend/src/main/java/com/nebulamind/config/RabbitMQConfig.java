@@ -1,6 +1,8 @@
 package com.nebulamind.config;
 
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -8,6 +10,11 @@ import org.springframework.context.annotation.Profile;
 @Configuration
 @Profile("!dev")
 public class RabbitMQConfig {
+
+    @Bean
+    public MessageConverter jsonMessageConverter() {
+        return new Jackson2JsonMessageConverter();
+    }
 
     public static final String FILE_UPLOAD_QUEUE = "nebulamind.file.upload";
     public static final String FILE_DELETE_QUEUE = "nebulamind.file.delete";
