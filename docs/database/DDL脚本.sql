@@ -80,7 +80,7 @@ CREATE TABLE files (
 
     -- 约束
     CONSTRAINT ck_files_status CHECK (status IN ('UPLOADING', 'PROCESSING', 'COMPLETED', 'FAILED')),
-    CONSTRAINT ck_files_ai_status CHECK (ai_status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    CONSTRAINT ck_files_ai_status CHECK (ai_status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'SKIPPED')),
     CONSTRAINT ck_files_sensitive_level CHECK (sensitive_level IN ('NORMAL', 'LOW', 'MEDIUM', 'HIGH')),
     CONSTRAINT ck_files_size CHECK (size >= 0),
     CONSTRAINT ck_files_version CHECK (version >= 1),
@@ -417,7 +417,7 @@ COMMENT ON COLUMN files.tags IS 'AI生成的标签数组，JSONB格式';
 COMMENT ON COLUMN files.category IS 'AI分类结果';
 COMMENT ON COLUMN files.summary IS 'AI生成的文档摘要';
 COMMENT ON COLUMN files.sensitive_level IS '敏感等级：NORMAL/LOW/MEDIUM/HIGH';
-COMMENT ON COLUMN files.ai_status IS 'AI处理状态：PENDING/PROCESSING/COMPLETED/FAILED';
+COMMENT ON COLUMN files.ai_status IS 'AI处理状态：PENDING/PROCESSING/COMPLETED/FAILED/SKIPPED';
 COMMENT ON COLUMN files.cloud_drive_file_id IS '云盘/OSS文件原始ID，用于S3/WebDAV外部存储导入去重';
 COMMENT ON COLUMN files.encryption_mode IS '加密模式：NONE/SERVER/CLIENT';
 COMMENT ON COLUMN cloud_storage_configs.provider_type IS '存储类型：S3（兼容存储）、WEBDAV（WebDAV云盘）';
