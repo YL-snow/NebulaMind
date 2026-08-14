@@ -248,6 +248,8 @@ public class FileService {
 
         if ("FAILED".equalsIgnoreCase(request.getStatus())) {
             file.setAiErrorMessage(request.getErrorMessage());
+        } else if ("COMPLETED".equalsIgnoreCase(request.getStatus())) {
+            file.setAiErrorMessage(null);
         }
 
         file = fileRepository.save(file);

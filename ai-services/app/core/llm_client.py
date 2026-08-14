@@ -122,7 +122,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         last_exception = None
         for attempt in range(max_retries):
             try:
-                if not self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "chat"):
+                if not self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "llm"):
                     logger.warning("MaaS API 主动限流等待超时，直接降级返回")
                     return LLMResponse(
                         content="RATE_LIMITED:API调用次数已达上限，请等待1分钟后再试。当前限制：每分钟最多{0}次调用。".format(self._rate_limit_max),
@@ -175,7 +175,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         results = []
         for i, doc in enumerate(documents):
             try:
-                if not self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "rerank"):
+                if not self._wait_rate_limit(self._chat_timestamps, self._chat_lock, "llm"):
                     logger.warning("MaaS API 主动限流等待超时，rerank 跳过")
                     return []
                 resp = self.client.chat.completions.create(model=self.llm_model, messages=[{"role": "system", "content": "评估查询与文档的相关性，仅返回0到1之间的数字。"}, {"role": "user", "content": f"查询: {query}\n文档: {doc[:1000]}\n相关性分数(0-1):"}], temperature=0, max_tokens=10)
@@ -188,7 +188,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         return results[:top_n]
 
     def get_embedding(self, text):
-        if not self._wait_rate_limit(self._embed_timestamps, self._embed_lock, "embedding"):
+        if not self._wait_rate_limit(self._embed_timestamps, self._embed_lock, "llm"):
             raise RuntimeError("RATE_LIMITED:API rate limit reached, please wait and retry.")
         last_exception = None
         for attempt in range(4):
