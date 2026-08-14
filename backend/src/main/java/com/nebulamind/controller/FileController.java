@@ -260,7 +260,7 @@ public class FileController {
         }
 
         if (updates.containsKey("tags")) {
-            file.setTags(updates.get("tags"));
+            file.setTags(fileService.normalizeTags(updates.get("tags")));
         }
 
         File saved = fileService.saveFile(file);

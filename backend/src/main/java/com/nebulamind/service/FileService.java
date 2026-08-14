@@ -1,5 +1,7 @@
 package com.nebulamind.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nebulamind.dto.FileEventDTO;
 import com.nebulamind.dto.FileProcessCallbackRequest;
 import com.nebulamind.entity.File;
@@ -15,10 +17,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -35,6 +40,8 @@ public class FileService {
 
     private final StorageService storageService;
 
+    private final ObjectMapper objectMapper;
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private RabbitMQMessageService rabbitMQMessageService;
 
@@ -45,12 +52,14 @@ public class FileService {
                        FileContentRepository fileContentRepository,
                        UserRepository userRepository,
                        StorageService storageService,
-                       FileVersionService fileVersionService) {
+                       FileVersionService fileVersionService,
+                       ObjectMapper objectMapper) {
         this.fileRepository = fileRepository;
         this.fileContentRepository = fileContentRepository;
         this.userRepository = userRepository;
         this.storageService = storageService;
         this.fileVersionService = fileVersionService;
+        this.objectMapper = objectMapper;
     }
 
     public Page<File> getUserFiles(UUID userId, Pageable pageable) {
@@ -113,7 +122,7 @@ public class FileService {
 
         FileEventDTO event = FileEventDTO.ofUpload(file.getId(), file.getPath(), userId);
         if (!skipProcessing) {
-            sendUploadEvent(event);
+            sendAfterCommit(() -> sendUploadEvent(event));
         }
 
         return file;
@@ -167,7 +176,7 @@ public class FileService {
         log.info("File deleted: {}", id);
 
         FileEventDTO event = FileEventDTO.ofDelete(id, userId);
-        sendDeleteEvent(event);
+        sendAfterCommit(() -> sendDeleteEvent(event));
     }
 
     public InputStream downloadFile(UUID id, UUID userId) throws Exception {
@@ -214,7 +223,7 @@ public class FileService {
             file.setCategory(request.getCategory());
         }
         if (request.getTags() != null) {
-            file.setTags(request.getTags());
+            file.setTags(normalizeTags(request.getTags()));
         }
         if (request.getSummary() != null) {
             FileContent content = FileContent.builder()
@@ -290,6 +299,44 @@ public class FileService {
             rabbitMQMessageService.sendFileDeleteEvent(event);
         } else if (noOpMessageService != null) {
             noOpMessageService.sendFileDeleteEvent(event);
+        }
+    }
+
+    private void sendAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
+    public String normalizeTags(String rawTags) {
+        if (rawTags == null) {
+            return null;
+        }
+        try {
+            String trimmed = rawTags.trim();
+            if (trimmed.isEmpty()) {
+                return "[]";
+            }
+            List<String> tags;
+            if (trimmed.startsWith("[")) {
+                tags = objectMapper.readValue(trimmed, new TypeReference<List<String>>() {});
+            } else {
+                tags = Arrays.stream(trimmed.split("[,，]"))
+                        .map(String::trim)
+                        .filter(tag -> !tag.isEmpty())
+                        .toList();
+            }
+            return objectMapper.writeValueAsString(tags);
+        } catch (Exception e) {
+            log.warn("Invalid tags value: {}, falling back to empty array", rawTags);
+            return "[]";
         }
     }
 

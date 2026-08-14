@@ -74,7 +74,7 @@ class FileProcessorWorker:
         sensitive_items_json = json.dumps(cr.get("sensitive_items", []), ensure_ascii=False)
         self._send_callback(file_id, status="COMPLETED",
             category=cr.get("category", ""),
-            tags=",".join(cr.get("tags", [])),
+            tags=json.dumps(cr.get("tags", []), ensure_ascii=False),
             summary=sr.get("content", ""),
             sensitive_level=cr.get("sensitive_level", "normal"),
             sensitive_items=sensitive_items_json)
