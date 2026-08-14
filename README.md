@@ -26,7 +26,7 @@
 
 产品核心体验是"上传 → 理解 → 检索 → 生成"：用户上传文档后，系统自动完成文件解析、AI 分类打标、摘要生成、向量索引；用户可以用自然语言搜索文件、基于单文档或多文档问答，并直接生成摘要、报告；PPT 大纲与格式转换后端接口已实现，前端页面待接入。安全侧提供敏感内容两级检测、AES-256-GCM 加密和端到端加密；生态侧支持 MinIO/S3、WebDAV 云盘接入。
 
-项目采用双服务架构：Java 21 + Spring Boot 3.2 负责业务与安全，Python FastAPI 负责 AI 推理，前端使用 React 19 + TypeScript + Vite；基础设施包括 PostgreSQL、Redis、RabbitMQ、MinIO 与 Milvus，并通过 Docker Compose 统一编排。5 人团队按 Scrum 节奏在 8 周内完成 V1.0-V2.0 交付，沉淀了需求、架构、数据库、API、测试、部署等完整文档。
+项目源自学校 5 人课程小组作业，按 Scrum 节奏在 8 周内完成 V1.0-V2.0；本公开仓库为应聘整理的个人完善版，已重构代码并补齐文档。项目采用双服务架构：Java 21 + Spring Boot 3.2 负责业务与安全，Python FastAPI 负责 AI 推理，前端使用 React 19 + TypeScript + Vite；基础设施包括 PostgreSQL、Redis、RabbitMQ、MinIO 与 Milvus，并通过 Docker Compose 统一编排。
 
 
 ## 产品价值
@@ -84,7 +84,7 @@
 - S3 兼容接口
 - Sentinel 限流熔断
 - SkyWalking 调用链追踪（预留）
-- Docker Compose 开发/生产编排（生产部署待执行）
+- Docker Compose 开发/生产编排（旧版曾部署至阿里云 ECS；当前公开版本部署待执行）
 
 ---
 
@@ -185,7 +185,7 @@ flowchart TB
 | 团队分工 | W2 | 团队开发方案分配 | 5 个角色开发方案、任务分解、交付物定义 |
 | 迭代开发 | W3-W6 | 后端 / AI / 前端代码 | V1.0 基础架构 → V1.1 AI 集成 → V1.2 内容生成与安全 |
 | 测试验收 | W6-W7 | 验收记录、性能优化报告 | 功能测试、性能压测、安全加固 |
-| 部署交付 | W7-W8 | Docker 镜像 + 部署指南 | Docker Compose 编排、ECS 部署 |
+| 部署交付 | W7-W8 | Docker 镜像 + 部署指南 | Docker Compose 编排、ECS 部署方案（当前版本待执行） |
 
 ### 团队角色分工
 
