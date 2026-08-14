@@ -1,5 +1,7 @@
 package com.nebulamind.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
@@ -12,8 +14,8 @@ import org.springframework.context.annotation.Profile;
 public class RabbitMQConfig {
 
     @Bean
-    public MessageConverter jsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+    public MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
+        return new Jackson2JsonMessageConverter(objectMapper);
     }
 
     public static final String FILE_UPLOAD_QUEUE = "nebulamind.file.upload";
