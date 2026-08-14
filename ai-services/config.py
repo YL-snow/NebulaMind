@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     backend_callback_path: str = '/api/v1/files/process-callback'
     backend_api_key: str = ''  # 从环境变量 BACKEND_API_KEY 读取
 
+    rate_limit_max: int = 5
+    rate_limit_window: int = 60
+    rate_limit_max_wait: int = 600
+
     minio_endpoint: str = 'http://localhost:9000'
     minio_access_key: str = 'nebulamind'
     minio_secret_key: str = 'your-minio-password'

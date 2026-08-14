@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from typing import Optional, List, Dict, Any
 from config import settings
+from app.core.rate_limit import shared_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class WanwuProvider(BaseLLMProvider):
         data = resp.json(); elapsed = int((time.time() - start) * 1000)
         return EmbeddingResponse(embedding=data["data"][0]["embedding"], model=data.get("model", self.embedding_model), total_tokens=data.get("usage", {}).get("total_tokens", 0), latency_ms=elapsed)
 
+
     def rerank(self, query, documents, top_n=5):
         resp = self._client.post(f"{self.base_url}/rerank", headers=self._headers(), json={"model": self.reranker_model, "query": query, "documents": documents})
         data = resp.json()
@@ -93,6 +95,10 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             raise RuntimeError(f"Failed to initialize OpenAI provider: {e}")
 
     def _wait_rate_limit(self, timestamps, lock, name="chat", max_wait=10.0):
+        if shared_limiter.acquire(name, max_wait=settings.rate_limit_max_wait):
+            return True
+        logger.warning(f"[{name}] rate limit wait budget exceeded, degrading")
+        return False
         """主动速率限制：每分钟最多5次调用。超过可接受等待时间时立即降级。"""
         with lock:
             now = time.time()
@@ -180,6 +186,27 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             results.append(RerankResult(index=i, score=score, document=doc))
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_n]
+
+    def get_embedding(self, text):
+        if not self._wait_rate_limit(self._embed_timestamps, self._embed_lock, "embedding"):
+            raise RuntimeError("RATE_LIMITED:API rate limit reached, please wait and retry.")
+        last_exception = None
+        for attempt in range(4):
+            try:
+                start = time.time()
+                resp = self.client.embeddings.create(model=self.embedding_model, input=text)
+                elapsed = int((time.time() - start) * 1000)
+                return EmbeddingResponse(embedding=resp.data[0].embedding, model=resp.model, total_tokens=resp.usage.total_tokens, latency_ms=elapsed)
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "Too Many Requests" in error_str or "QPM" in error_str:
+                    last_exception = e
+                    wait = min(5 * (2 ** attempt), 30)
+                    logger.warning(f"MaaS API 429 rate limit (embedding, attempt {attempt+1}/4), waiting {wait}s: {e}")
+                    time.sleep(wait)
+                else:
+                    raise
+        raise RuntimeError("RATE_LIMITED:API rate limit reached, please wait and retry.") from last_exception
 
 class LLMClient:
     def __init__(self):
