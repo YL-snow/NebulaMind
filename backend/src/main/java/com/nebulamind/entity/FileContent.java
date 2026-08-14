@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -36,6 +38,7 @@ public class FileContent {
     private String chunkContent;
 
     @Column(name = "chunk_metadata", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String chunkMetadata;
 
     @Column(name = "char_count", nullable = false)
