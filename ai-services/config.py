@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     backend_callback_path: str = '/api/v1/files/process-callback'
     backend_api_key: str = ''  # 从环境变量 BACKEND_API_KEY 读取
 
+    minio_endpoint: str = 'http://localhost:9000'
+    minio_access_key: str = 'nebulamind'
+    minio_secret_key: str = 'your-minio-password'
+    minio_bucket_name: str = 'nebulamind-files'
+
     encryption_enabled: bool = False
     master_key_base64: str = ''
 

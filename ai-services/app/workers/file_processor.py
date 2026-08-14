@@ -56,14 +56,30 @@ class FileProcessorWorker:
             ch.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as e: logger.error(f"Delete handler error: {e}"); ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
+    def _download_from_minio(self, object_path):
+        import os, tempfile
+        try:
+            from minio import Minio
+            endpoint = settings.minio_endpoint.replace("http://", "").replace("https://", "")
+            secure = settings.minio_endpoint.startswith("https://")
+            client = Minio(endpoint, access_key=settings.minio_access_key, secret_key=settings.minio_secret_key, secure=secure)
+            local_path = os.path.join(tempfile.gettempdir(), object_path.replace("/", "_"))
+            client.fget_object(settings.minio_bucket_name, object_path, local_path)
+            logger.info(f"Downloaded MinIO object {object_path} to {local_path}")
+            return local_path
+        except Exception as e:
+            logger.warning(f"MinIO download failed for {object_path}: {e}")
+            return object_path
+
     def _process_file(self, file_id, file_path, user_id):
         from app.utils.file_parser import FileParser
         from app.services.file_understanding import FileUnderstandingService
         from app.services.vector_store import VectorStoreService
-        try: content = FileParser.parse(file_path)
+        local_path = self._download_from_minio(file_path)
+        try: content = FileParser.parse(local_path)
         except:
             try:
-                with open(file_path, "r", encoding="utf-8") as f: content = f.read()
+                with open(local_path, "r", encoding="utf-8") as f: content = f.read()
             except: content = f"[Binary: {file_path}]"
         if not content: self._send_callback(file_id, status="FAILED", error_message="No text content"); return
         cr = FileUnderstandingService.classify_and_tag(file_id, content)
