@@ -85,7 +85,7 @@ class FileProcessorWorker:
             url = f"{settings.backend_base_url}/api/v1/files/{file_id}/process-callback"
             payload = {"status": status, "category": category, "tags": tags, "summary": summary, "sensitiveLevel": sensitive_level.upper(), "sensitiveItems": sensitive_items, "errorMessage": error_message}
             headers = {}
-            if settings.backend_api_key: headers["X-API-Key"] = settings.backend_api_key
+            if settings.backend_api_key: headers["X-Internal-Api-Key"] = settings.backend_api_key
             with httpx.Client(timeout=30.0) as client:
                 resp = client.post(url, json=payload, headers=headers)
                 if resp.status_code in (200, 201, 204): logger.info(f"Callback OK: {file_id} {status}")
