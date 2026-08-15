@@ -107,11 +107,11 @@ export const Generate = () => {
     const currentResult = results[activeTab]
     if (!currentResult) return
 
-    const blob = new Blob([currentResult], { type: 'text/markdown' })
+    const blob = new Blob([currentResult], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${activeTab}-output.md`
+    a.download = `${activeTab}-output.txt`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

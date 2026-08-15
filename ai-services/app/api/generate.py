@@ -12,7 +12,7 @@ class ExtractRequest(BaseModel): file_id: str; content: str; file_path: Optional
 class ReportRequest(BaseModel): file_ids: List[str]; topic: str; contents: Optional[dict] = None; file_paths: Optional[dict] = None; file_contents_base64: Optional[dict] = None  # {file_id: base64_content}
 class PPTRequest(BaseModel): file_ids: List[str]; topic: str; contents: Optional[dict] = None; file_paths: Optional[dict] = None; file_contents_base64: Optional[dict] = None  # {file_id: base64_content}
 class ConvertRequest(BaseModel): file_id: str; content: str; target_format: str; file_path: Optional[str] = None; file_content_base64: Optional[str] = None; file_type: Optional[str] = None; source_format: Optional[str] = None
-class GenerateResponse(BaseModel): file_id: str = ""; content: str; key_points: List[str] = []; format: str = "markdown"
+class GenerateResponse(BaseModel): file_id: str = ""; content: str; key_points: List[str] = []; format: str = "text"
 
 @router.post("/api/v1/generate/summary", response_model=GenerateResponse)
 async def generate_summary(request: SummaryRequest):

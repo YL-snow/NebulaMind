@@ -5,6 +5,7 @@ from app.core.llm_client import llm_client
 from app.prompts.templates import PromptManager
 from app.services.sensitive_detector import sensitive_detector, SensitiveReport
 from app.utils.file_parser import FileParser
+from app.utils.plain_text import to_plain_text
 
 logger = logging.getLogger(__name__)
 # MaaS API limit is 5 calls/minute; keep a long summary within that budget.
@@ -42,17 +43,19 @@ class FileUnderstandingService:
                 return FileUnderstandingService._generate_long_summary(file_id, content, max_length)
             messages = PromptManager.format("summary", content=content, max_length=max_length)
             response = llm_client.chat(messages, module="file_understanding", file_id=file_id, temperature=0.5, max_tokens=max_length*2)
-            return {"file_id": file_id, "content": response.content, "key_points": FileUnderstandingService._extract_key_points(response.content), "format": "markdown"}
+            clean_content = to_plain_text(response.content)
+            return {"file_id": file_id, "content": clean_content, "key_points": FileUnderstandingService._extract_key_points(clean_content), "format": "text"}
         except Exception as e:
             logger.warning(f"LLM summary failed, returning fallback: {e}")
-            return {"file_id": file_id, "content": "AI 摘要服务暂时不可用，请稍后重试", "key_points": [], "format": "markdown"}
+            return {"file_id": file_id, "content": "AI 摘要服务暂时不可用，请稍后重试", "key_points": [], "format": "text"}
 
     @staticmethod
     def _generate_long_summary(file_id, content, max_length=300):
         if len(content) <= LONG_SUMMARY_SINGLE_MAX_CHARS:
             messages = PromptManager.format("summary", content=content, max_length=max_length)
             r = llm_client.chat(messages, module="file_understanding", file_id=file_id, temperature=0.5, max_tokens=max_length*2)
-            return {"file_id": file_id, "content": r.content, "key_points": FileUnderstandingService._extract_key_points(r.content), "format": "markdown"}
+            clean_content = to_plain_text(r.content)
+            return {"file_id": file_id, "content": clean_content, "key_points": FileUnderstandingService._extract_key_points(clean_content), "format": "text"}
         from app.utils.text_splitter import TextSplitter
         splitter = TextSplitter(max_chunk_size=4000)
         chunks = splitter.split(content)[:MAP_REDUCE_MAX_CHUNKS]
@@ -62,8 +65,9 @@ class FileUnderstandingService:
             r = llm_client.chat(messages, module="file_understanding", file_id=file_id, temperature=0.5, max_tokens=300)
             summaries.append(r.content)
         combined = "\n\n---\n\n".join(summaries)
-        r = llm_client.chat([{"role": "system", "content": "将以下分段摘要合并为完整摘要。"}, {"role": "user", "content": f"分段摘要：\n{combined}\n\n合并为{max_length}字以内的完整摘要。"}], module="file_understanding", file_id=file_id, temperature=0.5, max_tokens=max_length*2)
-        return {"file_id": file_id, "content": r.content, "key_points": FileUnderstandingService._extract_key_points(r.content), "format": "markdown"}
+        r = llm_client.chat([{"role": "system", "content": "将以下分段摘要合并为完整摘要。只输出纯文字，不要使用 Markdown 格式标记。"}, {"role": "user", "content": f"分段摘要：\n{combined}\n\n合并为{max_length}字以内的完整摘要。只输出纯文字，不要使用 Markdown 标题、加粗、列表等格式标记。"}], module="file_understanding", file_id=file_id, temperature=0.5, max_tokens=max_length*2)
+        clean_content = to_plain_text(r.content)
+        return {"file_id": file_id, "content": clean_content, "key_points": FileUnderstandingService._extract_key_points(clean_content), "format": "text"}
 
     @staticmethod
     def _detect_sensitive(file_id, content) -> SensitiveReport:

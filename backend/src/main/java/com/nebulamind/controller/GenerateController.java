@@ -86,7 +86,7 @@ public class GenerateController {
             if (isImageFile(file)) {
                 String base64 = readImageAsBase64(file.getPath());
                 String mimeType = IMAGE_MIME_TYPES.get(file.getFileType().toLowerCase());
-                String prompt = "请详细描述这张图片的内容，包括图片中的文字信息（如有），并给出摘要。";
+                String prompt = "请详细描述这张图片的内容，包括图片中的文字信息（如有），并给出摘要。只输出纯文字，不要使用 Markdown 格式标记。";
                 MaasApiClient.VisionResult result = maasApiClient.chatVision(prompt, base64, mimeType, 0.7, 1000);
                 if (result.isSuccess()) {
                     response = toGenerateResponse(request.getFileId(), result.getResponse());
@@ -113,7 +113,7 @@ public class GenerateController {
                                     .fileId(request.getFileId())
                                     .content(visionSummary)
                                     .keyPoints(null)
-                                    .format("markdown")
+                                    .format("text")
                                     .build();
                         }
                     }
@@ -126,7 +126,7 @@ public class GenerateController {
                             .fileId(request.getFileId())
                             .content("AI 摘要服务暂时不可用，请稍后重试")
                             .keyPoints(null)
-                            .format("markdown")
+                            .format("text")
                             .build();
                 }
             }
@@ -174,7 +174,7 @@ public class GenerateController {
             if (isImageFile(file)) {
                 String base64 = readImageAsBase64(file.getPath());
                 String mimeType = IMAGE_MIME_TYPES.get(file.getFileType().toLowerCase());
-                String prompt = "请仔细分析这张图片，提取其中的所有关键信息，包括文字内容、数据、图表信息等。以结构化方式输出。";
+                String prompt = "请仔细分析这张图片，提取其中的所有关键信息，包括文字内容、数据、图表信息等。只输出纯文字，不要使用 Markdown 格式标记。";
                 MaasApiClient.VisionResult result = maasApiClient.chatVision(prompt, base64, mimeType, 0.7, 1500);
                 if (result.isSuccess()) {
                     return ResponseEntity.ok(toGenerateResponse(request.getFileId(), result.getResponse()));
@@ -559,6 +559,10 @@ public class GenerateController {
     }
 
     private AiGenerateResponse toGenerateResponse(String fileId, MaasChatResponse chatResponse) {
+        return toGenerateResponse(fileId, chatResponse, "text");
+    }
+
+    private AiGenerateResponse toGenerateResponse(String fileId, MaasChatResponse chatResponse, String format) {
         if (chatResponse == null || chatResponse.getChoices() == null || chatResponse.getChoices().isEmpty()) {
             return AiGenerateResponse.builder()
                     .fileId(fileId)
@@ -569,7 +573,7 @@ public class GenerateController {
         return AiGenerateResponse.builder()
                 .fileId(fileId)
                 .content(content)
-                .format("markdown")
+                .format(format)
                 .build();
     }
 
@@ -592,7 +596,7 @@ public class GenerateController {
                 }
             }
 
-            String summaryPrompt = "根据以下多张图片的描述内容，生成一份关于「" + topic + "」的综合分析报告，要求格式规范、内容完整。\n\n"
+            String summaryPrompt = "根据以下多张图片的描述内容，生成一份关于「" + topic + "」的综合分析报告，要求格式规范、内容完整。只输出纯文字，不要使用 Markdown 标题、加粗、列表等格式标记，不要输出开场白或结束语。\n\n"
                     + combined.toString();
             List<MaasApiClient.Message> msgs = List.of(new MaasApiClient.Message("user", summaryPrompt));
             MaasChatResponse finalResp = maasApiClient.chat("deepseek-v3_2", msgs, 0.7, 2000);
@@ -639,7 +643,7 @@ public class GenerateController {
                 return ResponseEntity.ok(AiGenerateResponse.builder()
                         .content("图片分析失败，MaaS 平台无返回结果").build());
             }
-            return ResponseEntity.ok(toGenerateResponse(fileId, finalResp));
+            return ResponseEntity.ok(toGenerateResponse(fileId, finalResp, "markdown"));
         } catch (Exception e) {
             log.error("图片 PPT 生成失败", e);
             return ResponseEntity.ok(AiGenerateResponse.builder()

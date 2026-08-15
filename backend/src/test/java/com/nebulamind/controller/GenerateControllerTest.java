@@ -106,7 +106,7 @@ class GenerateControllerTest {
                 .format("text")
                 .build();
 
-        when(aiServiceClient.generateSummary(anyString(), anyString())).thenReturn(generateResponse);
+        when(aiServiceClient.generateSummary(anyString(), anyString(), any(), any(), any())).thenReturn(generateResponse);
 
         GenerateRequest request = GenerateRequest.builder()
                 .fileId(testFile.getId().toString())
@@ -125,14 +125,17 @@ class GenerateControllerTest {
     void testGenerateReport() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getUserFiles(any(UUID.class), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(Arrays.asList(testFile)));
+        when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
+        InputStream inputStream = new ByteArrayInputStream("test content".getBytes());
+        when(minIOService.downloadFile(anyString())).thenReturn(inputStream);
 
         AiGenerateResponse generateResponse = AiGenerateResponse.builder()
                 .content("test report content")
                 .keyPoints(Arrays.asList("report point 1"))
-                .format("markdown")
+                .format("text")
                 .build();
 
-        when(aiServiceClient.generateReport(anyList(), anyString())).thenReturn(generateResponse);
+        when(aiServiceClient.generateReport(anyList(), anyString(), any(), any(), any())).thenReturn(generateResponse);
 
         GenerateRequest request = GenerateRequest.builder()
                 .topic("Test Report")
@@ -150,6 +153,9 @@ class GenerateControllerTest {
     void testGeneratePPT() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getUserFiles(any(UUID.class), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(Arrays.asList(testFile)));
+        when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
+        InputStream inputStream = new ByteArrayInputStream("test content".getBytes());
+        when(minIOService.downloadFile(anyString())).thenReturn(inputStream);
 
         AiGenerateResponse generateResponse = AiGenerateResponse.builder()
                 .content("PPT content")
@@ -157,7 +163,7 @@ class GenerateControllerTest {
                 .format("pptx")
                 .build();
 
-        when(aiServiceClient.generatePPT(anyList(), anyString())).thenReturn(generateResponse);
+        when(aiServiceClient.generatePPT(anyList(), anyString(), any(), any(), any())).thenReturn(generateResponse);
 
         GenerateRequest request = GenerateRequest.builder()
                 .topic("Test Presentation")

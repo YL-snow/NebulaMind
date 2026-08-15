@@ -5,6 +5,7 @@ from app.core.llm_client import llm_client
 from app.prompts.templates import PromptManager
 from app.services.vector_store import VectorStoreService
 from app.utils.file_parser import FileParser
+from app.utils.plain_text import to_plain_text
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class ContentGenerationService:
         truncated = content[:8000] if len(content) > 8000 else content
         messages = PromptManager.format("extract", content=truncated)
         response = llm_client.chat(messages, module="content_generation", file_id=file_id, temperature=0.5)
-        return {"file_id": file_id, "content": response.content, "key_points": [], "format": "markdown"}
+        return {"file_id": file_id, "content": to_plain_text(response.content), "key_points": [], "format": "text"}
 
     @staticmethod
     def generate_report(file_ids, topic, contents=None, file_paths=None, file_contents_base64=None):
@@ -47,7 +48,7 @@ class ContentGenerationService:
             if lb > 4000: combined = combined[:lb+1]
         messages = PromptManager.format("report", combined_content=combined, topic=topic)
         response = llm_client.chat(messages, module="content_generation", temperature=0.7, max_tokens=4096)
-        return {"file_id": "", "content": response.content, "key_points": [], "format": "markdown"}
+        return {"file_id": "", "content": to_plain_text(response.content), "key_points": [], "format": "text"}
 
     @staticmethod
     def generate_ppt(file_ids, topic, contents=None, file_paths=None, file_contents_base64=None):

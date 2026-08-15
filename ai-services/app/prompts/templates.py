@@ -14,7 +14,7 @@ CLASSIFY_TEMPLATE = PromptTemplate("classify",
 
 SUMMARY_TEMPLATE = PromptTemplate("summary",
     "你是专业的文档摘要生成器，擅长从长文档中提取核心信息。",
-    '请为以下文档生成简洁的中文摘要（{max_length}字以内），包含核心内容和关键结论。\n\n<DOCUMENT_START>\n{content}\n<DOCUMENT_END>\n\n直接输出摘要，不要其他内容。')
+    '请为以下文档生成简洁的中文摘要（{max_length}字以内），包含核心内容和关键结论。\n\n<DOCUMENT_START>\n{content}\n<DOCUMENT_END>\n\n直接输出摘要，不要其他内容。只输出纯文字，不要使用 Markdown 标题、加粗、列表等任何格式标记，不要输出开场白或结束语。')
 
 SENSITIVE_DETECT_TEMPLATE = PromptTemplate("sensitive_detect",
     "你是敏感信息检测专家。识别文本中的敏感信息，严格按JSON格式输出。",
@@ -30,11 +30,11 @@ CROSS_DOCUMENT_QA_TEMPLATE = PromptTemplate("cross_qa",
 
 EXTRACT_TEMPLATE = PromptTemplate("extract",
     "你是专业的信息提炼助手。从文档中提取关键信息，结构化呈现。",
-    '从以下文档中提取关键信息。\n\n<DOCUMENT_START>\n{content}\n<DOCUMENT_END>\n\n提取：1.核心主题和目的 2.关键数据和统计 3.主要结论和建议 4.需关注的重点\n\n以结构化Markdown格式输出。')
+    '从以下文档中提取关键信息。\n\n<DOCUMENT_START>\n{content}\n<DOCUMENT_END>\n\n提取：1.核心主题和目的 2.关键数据和统计 3.主要结论和建议 4.需关注的重点\n\n以纯文字段落输出，不要使用 Markdown 标题、加粗、列表、引用等任何格式标记，不要输出开场白或结束语。')
 
 REPORT_TEMPLATE = PromptTemplate("report",
     "你是专业的报告撰写助手。基于提供的素材生成高质量分析报告，结构完整、逻辑清晰、内容专业。",
-    '基于以下素材生成综合分析报告。\n\n主题：{topic}\n\n素材内容：\n{combined_content}\n\n生成报告包含：1.报告摘要 2.背景与目的 3.核心分析 4.问题与挑战 5.建议与下一步行动 6.结论\n\n以Markdown格式输出。')
+    '基于以下素材生成综合分析报告。\n\n主题：{topic}\n\n素材内容：\n{combined_content}\n\n生成报告包含：1.报告摘要 2.背景与目的 3.核心分析 4.问题与挑战 5.建议与下一步行动 6.结论\n\n以纯文字段落输出，不要使用 Markdown 标题、加粗、列表、引用等任何格式标记，不要输出开场白或结束语。')
 
 PPT_TEMPLATE = PromptTemplate("ppt",
     "你是专业的演示文稿内容策划助手。基于素材生成PPT内容大纲，每页包含标题、要点和备注。",
