@@ -4,8 +4,9 @@ WORKDIR /build
 
 COPY pom.xml .
 COPY src ./src
+COPY settings.xml .
 
-RUN mvn clean package -DskipTests -q
+RUN mvn -s settings.xml clean package -DskipTests -q
 
 FROM eclipse-temurin:21-jre-alpine
 
