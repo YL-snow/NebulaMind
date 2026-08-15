@@ -61,7 +61,6 @@ public class SecurityController {
 
     /**
      * 敏感信息检测（两级检测：本地正则 + AI LLM 增强）
-     * 高风险文件自动加密
      * POST /api/v1/security/detect
      * Body: { "fileId": "...", "useLlm": true }
      */
@@ -230,36 +229,6 @@ public class SecurityController {
                 }
             }
 
-            // 高风险自动加密，开关由前端安全设置传入
-            boolean autoEncrypt = Boolean.parseBoolean(request.getOrDefault("autoEncrypt", "true"));
-            boolean autoEncrypted = false;
-            if ("high".equals(sensitiveLevel) && autoEncrypt && !Boolean.TRUE.equals(file.getIsEncrypted())) {
-                try {
-                    Map<String, Object> keyInfo = keyManagementService.setupFileEncryption(userId);
-                    SecretKey fileKey = (SecretKey) keyInfo.get("fileKey");
-                    String encryptedFileKey = (String) keyInfo.get("encryptedFileKey");
-                    byte[] encryptedContent = encryptionService.encryptAesGcm(plainBytes, fileKey);
-                    storageService.uploadFile(file.getPath(), encryptedContent, "application/octet-stream");
-                    file.setEncryptionMode(File.EncryptionMode.SERVER);
-                    file.setIsEncrypted(true);
-                    file.setEncryptionKeyId(encryptedFileKey);
-                    fileService.saveFile(file);
-                    autoEncrypted = true;
-                    log.info("Auto-encrypted HIGH sensitive file: {} (user: {})", fileId, userId);
-                    if (auditLogService != null) {
-                        try {
-                            auditLogService.log(userId, AuditLog.Action.ENCRYPT,
-                                AuditLog.ResourceType.FILE, fileId,
-                                "{\"reason\":\"auto_encrypt_high_sensitive\",\"algorithm\":\"AES-256-GCM\"}",
-                                httpRequest);
-                        } catch (Exception logEx) {
-                            log.warn("Failed to write audit log for auto-encryption: {}", logEx.getMessage());
-                        }
-                    }
-                } catch (Exception e) {
-                    log.error("Auto-encryption failed for HIGH sensitive file {}: {}", fileId, e.getMessage());
-                }
-            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("fileId", fileId);
@@ -267,13 +236,9 @@ public class SecurityController {
             response.put("sensitiveItems", items);
             response.put("scannedAt", LocalDateTime.now().toString());
             response.put("detectionMethod", detectionMethod);
-            response.put("autoEncrypted", autoEncrypted);
+            response.put("autoEncrypted", false);
             if (aiWarning != null && !aiWarning.isBlank()) {
                 response.put("warning", aiWarning);
-            }
-            if (autoEncrypted) {
-                response.put("encryptionAlgorithm", "AES-256-GCM");
-                response.put("message", "文件包含高风险敏感信息，已自动加密存储");
             }
             return ResponseEntity.ok(response);
         } catch (Exception e) {

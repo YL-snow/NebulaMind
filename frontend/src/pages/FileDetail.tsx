@@ -64,6 +64,7 @@ export const FileDetail = () => {
   const [pendingKeyAction, setPendingKeyAction] = useState<'decrypt' | 'decrypt-download' | 'encrypt' | 'text-edit' | 'upload-version' | 'save-text'>('decrypt')
   const [pendingUploadVersion, setPendingUploadVersion] = useState<{ file: File; comment: string } | null>(null)
   const [encryptLoading, setEncryptLoading] = useState(false)
+  const [serverDecryptLoading, setServerDecryptLoading] = useState(false)
   const [showEncryptKeyModal, setShowEncryptKeyModal] = useState(false)
   const [oneTimeKey, setOneTimeKey] = useState<{ fileName: string; key: string } | null>(null)
   const [copiedKey, setCopiedKey] = useState(false)
@@ -178,6 +179,21 @@ export const FileDetail = () => {
     if (file.encryptionMode !== 'CLIENT') return
     setPendingUploadVersion(null)
     openKeyPrompt('decrypt')
+  }
+
+  const handleServerDecrypt = async () => {
+    if (!file) return
+    if (!confirm(`确定要解密文件 ${file.name} 吗？解密后文件将恢复为明文存储。`)) return
+    setServerDecryptLoading(true)
+    try {
+      await securityApi.decrypt({ fileId: file.id })
+      setFile((prev) => prev ? { ...prev, isEncrypted: false, encryptionMode: 'NONE' } : null)
+      success('文件解密成功')
+    } catch (err) {
+      error((err as Error).message || '解密失败')
+    } finally {
+      setServerDecryptLoading(false)
+    }
   }
 
   const handleDownload = async () => {
@@ -635,6 +651,12 @@ export const FileDetail = () => {
         <div className="flex items-center gap-3">
             {file.encryptionMode === 'CLIENT' && !unlockedFileKey && (
             <Button variant="outline" onClick={handleDecrypt}>
+              <Unlock className="h-4 w-4 mr-2" />
+              解密
+            </Button>
+          )}
+            {file.encryptionMode === 'SERVER' && file.isEncrypted && (
+            <Button variant="outline" onClick={handleServerDecrypt} loading={serverDecryptLoading}>
               <Unlock className="h-4 w-4 mr-2" />
               解密
             </Button>

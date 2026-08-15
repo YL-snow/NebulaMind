@@ -65,10 +65,7 @@ class SecurityControllerTest {
     private KeyManagementService keyManagementService;
 
     @MockBean
-    private MinIOService minIOService;
-
-    @MockBean
-    private LocalStorageService localStorageService;
+    private StorageService storageService;
 
     @MockBean
     private AiServiceClient aiServiceClient;
@@ -110,7 +107,7 @@ class SecurityControllerTest {
     void testDetectSensitive_NormalContent() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("Hello, this is a normal document with no sensitive data.".getBytes()));
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("Hello, this is a normal document with no sensitive data.".getBytes()));
 
         mockMvc.perform(post("/api/v1/security/detect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -120,7 +117,7 @@ class SecurityControllerTest {
                 .andExpect(jsonPath("$.sensitiveLevel").value("normal"))
                 .andExpect(jsonPath("$.sensitiveItems").isArray())
                 .andExpect(jsonPath("$.sensitiveItems.length()").value(0))
-                .andExpect(jsonPath("$.detectionMethod").value("regex"))
+                .andExpect(jsonPath("$.detectionMethod").value("none"))
                 .andExpect(jsonPath("$.autoEncrypted").value(false));
     }
 
@@ -129,7 +126,7 @@ class SecurityControllerTest {
     void testDetectSensitive_WithPhoneNumber() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
                 "请联系电话 13800138000 进行咨询。".getBytes()));
 
         mockMvc.perform(post("/api/v1/security/detect")
@@ -146,17 +143,12 @@ class SecurityControllerTest {
 
     @Test
     @WithMockUser(username = "test@example.com")
-    void testDetectSensitive_WithIdCard_HighRiskAutoEncrypt() throws Exception {
+    void testDetectSensitive_WithIdCard_HighRisk() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
         // 使用含X的身份证号，避免同时被银行卡正则匹配
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
                 "身份证号: 11010119900101123X".getBytes()));
-        when(encryptionService.generateAesKey()).thenReturn(testFileKey);
-        when(encryptionService.encryptAesGcm(any(byte[].class), any(SecretKey.class)))
-                .thenReturn("encrypted-data".getBytes());
-        when(keyManagementService.setupFileEncryption(any(UUID.class)))
-                .thenReturn(Map.of("fileKey", testFileKey, "encryptedFileKey", Base64.getEncoder().encodeToString("mock-key".getBytes())));
 
         mockMvc.perform(post("/api/v1/security/detect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -166,9 +158,7 @@ class SecurityControllerTest {
                 .andExpect(jsonPath("$.sensitiveItems.length()").value(1))
                 .andExpect(jsonPath("$.sensitiveItems[0].type").value("id_card"))
                 .andExpect(jsonPath("$.sensitiveItems[0].riskLevel").value("high"))
-                .andExpect(jsonPath("$.autoEncrypted").value(true))
-                .andExpect(jsonPath("$.encryptionAlgorithm").value("AES-256-GCM"))
-                .andExpect(jsonPath("$.message").value("文件包含高风险敏感信息，已自动加密存储"))
+                .andExpect(jsonPath("$.autoEncrypted").value(false))
                 .andExpect(jsonPath("$.detectionMethod").value("regex"));
     }
 
@@ -177,8 +167,8 @@ class SecurityControllerTest {
     void testDetectSensitive_WithBankCard() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
-                "银行卡号: 6222021234567890123".getBytes()));
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
+                "银行卡号: 6222021234567890128".getBytes()));
 
         mockMvc.perform(post("/api/v1/security/detect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -188,7 +178,7 @@ class SecurityControllerTest {
                 .andExpect(jsonPath("$.sensitiveItems.length()").value(1))
                 .andExpect(jsonPath("$.sensitiveItems[0].type").value("bank_card"))
                 .andExpect(jsonPath("$.sensitiveItems[0].riskLevel").value("high"))
-                .andExpect(jsonPath("$.autoEncrypted").value(true));
+                .andExpect(jsonPath("$.autoEncrypted").value(false));
     }
 
     @Test
@@ -196,7 +186,7 @@ class SecurityControllerTest {
     void testDetectSensitive_WithEmail() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
                 "联系邮箱: test.user@example.com".getBytes()));
 
         mockMvc.perform(post("/api/v1/security/detect")
@@ -240,12 +230,12 @@ class SecurityControllerTest {
     void testDetectSensitive_MultipleSensitiveTypes() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
                 ("用户信息：\n" +
                  "身份证: 11010119900101123X\n" +
                  "手机: 13800138000\n" +
                  "邮箱: user@test.com\n" +
-                 "银行卡: 6222021234567890123").getBytes()));
+                 "银行卡: 6222021234567890128").getBytes()));
 
         mockMvc.perform(post("/api/v1/security/detect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -253,7 +243,7 @@ class SecurityControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sensitiveLevel").value("high"))
                 .andExpect(jsonPath("$.sensitiveItems.length()").value(4))
-                .andExpect(jsonPath("$.autoEncrypted").value(true));
+                .andExpect(jsonPath("$.autoEncrypted").value(false));
     }
 
     // ===================== 文件加密测试 =====================
@@ -263,7 +253,7 @@ class SecurityControllerTest {
     void testEncryptFile_Success() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("plain content".getBytes()));
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("plain content".getBytes()));
         when(encryptionService.generateAesKey()).thenReturn(testFileKey);
         when(encryptionService.encryptAesGcm(any(byte[].class), any(SecretKey.class)))
                 .thenReturn("encrypted".getBytes());
@@ -338,7 +328,7 @@ class SecurityControllerTest {
 
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(encryptedFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("encrypted-bytes".getBytes()));
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("encrypted-bytes".getBytes()));
         when(keyManagementService.unwrapFileKey(anyString(), any(UUID.class))).thenReturn(testFileKey);
         when(encryptionService.decryptAesGcm(any(byte[].class), any(SecretKey.class)))
                 .thenReturn("decrypted content".getBytes());
@@ -370,13 +360,13 @@ class SecurityControllerTest {
 
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(noKeyFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("encrypted".getBytes()));
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream("encrypted".getBytes()));
 
         mockMvc.perform(post("/api/v1/security/decrypt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"fileId\":\"" + noKeyFile.getId() + "\"}"))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("File decryption failed: File is not encrypted or encryption key is missing"));
+                .andExpect(jsonPath("$.error").value("File decryption failed: 加密密钥缺失，无法解密"));
     }
 
     @Test
@@ -397,7 +387,7 @@ class SecurityControllerTest {
     void testDetectSensitive_ContentMasking() throws Exception {
         when(userRepository.findByEmail(anyString())).thenReturn(java.util.Optional.of(testUser));
         when(fileService.getFileById(any(UUID.class), any(UUID.class))).thenReturn(testFile);
-        when(minIOService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
+        when(storageService.downloadFile(anyString())).thenReturn(new ByteArrayInputStream(
                 "身份证: 110101199001011234".getBytes()));
 
         mockMvc.perform(post("/api/v1/security/detect")

@@ -230,6 +230,13 @@ export interface SecurityEncryptResponse {
   encryptionMode?: 'NONE' | 'SERVER' | 'CLIENT'
 }
 
+export interface SecurityDecryptResponse {
+  fileId: string
+  isEncrypted: boolean
+  decryptedAt: string
+  encryptionMode?: 'NONE' | 'SERVER' | 'CLIENT'
+}
+
 export interface VersionItem {
   version: number
   fileSize: number

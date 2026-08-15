@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Shield, Lock, AlertTriangle, CheckCircle, FileText, Search, Settings, Copy, Download, Unlock, KeyRound } from 'lucide-react'
+import { Shield, Lock, AlertTriangle, CheckCircle, FileText, Search, Copy, Download, Unlock, KeyRound } from 'lucide-react'
 import { Button } from '@/components/common/Button'
 import { Card, CardHeader, CardBody } from '@/components/common/Card'
 import { Input } from '@/components/common/Input'
@@ -21,7 +21,6 @@ export const Security = () => {
   const [warning, setWarning] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [filesLoading, setFilesLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'files' | 'settings'>('files')
   const [activeFilter, setActiveFilter] = useState<'high' | 'medium' | 'normal' | 'encrypted' | null>(null)
   const [unlockedFileIds, setUnlockedFileIds] = useState<Set<string>>(new Set())
   const [decryptedFileKeys, setDecryptedFileKeys] = useState<Record<string, string>>({})
@@ -35,18 +34,6 @@ export const Security = () => {
   const [showOneTimeKeyModal, setShowOneTimeKeyModal] = useState(false)
   const [oneTimeKey, setOneTimeKey] = useState<{ fileName: string; key: string } | null>(null)
   const [copiedKey, setCopiedKey] = useState(false)
-  interface SecuritySettings {
-    encryptHighSensitive: boolean
-  }
-
-  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('securitySettings') || '{}')
-      return { encryptHighSensitive: saved?.encryptHighSensitive !== false }
-    } catch {
-      return { encryptHighSensitive: true }
-    }
-  })
 
   const { files, setFiles } = useFileStore()
   const { error, success } = useToast()
@@ -82,12 +69,11 @@ export const Security = () => {
     try {
       const response = await securityApi.detect({
         fileId: file.id,
-        autoEncrypt: securitySettings.encryptHighSensitive,
       })
       const updatedFile: FileItem = {
         ...file,
         sensitiveLevel: response.sensitiveLevel,
-        isEncrypted: response.autoEncrypted ? true : file.isEncrypted,
+        isEncrypted: file.isEncrypted,
       }
       setSensitiveItems(response.sensitiveItems)
       setWarning(response.warning || '')
@@ -97,7 +83,7 @@ export const Security = () => {
       if (response.warning) {
         error(response.warning)
       } else {
-        success(response.autoEncrypted ? '检测完成，高风险内容已自动加密' : '安全检测完成')
+        success('安全检测完成')
       }
     } catch (err) {
       error((err as Error).message || '检测失败')
@@ -224,9 +210,20 @@ export const Security = () => {
     }
   }
 
-  const handleSaveSettings = () => {
-    localStorage.setItem('securitySettings', JSON.stringify(securitySettings))
-    success('安全设置已保存')
+  const handleServerDecrypt = async (file: FileItem) => {
+    if (!confirm(`确定要解密文件 ${file.name} 吗？解密后文件将恢复为明文存储。`)) return
+    setDecryptLoading(true)
+    try {
+      await securityApi.decrypt({ fileId: file.id })
+      const updatedFile: FileItem = { ...file, isEncrypted: false, encryptionMode: 'NONE' }
+      setFiles(files.map((f) => (f.id === file.id ? updatedFile : f)))
+      setSelectedFile((prev) => prev?.id === file.id ? updatedFile : prev)
+      success('文件解密成功')
+    } catch (err) {
+      error((err as Error).message || '解密失败')
+    } finally {
+      setDecryptLoading(false)
+    }
   }
 
   const handleCopyOneTimeKey = async () => {
@@ -287,10 +284,6 @@ export const Security = () => {
     { key: 'encrypted' as const, label: '已加密文件', value: encryptedFiles.length, color: 'text-blue-500', bgColor: 'bg-blue-50' },
   ]
 
-  const tabs = [
-    { key: 'files', label: '敏感文件', icon: AlertTriangle },
-    { key: 'settings', label: '安全设置', icon: Settings },
-  ]
 
   const displayFiles = activeFilter
     ? filteredFiles.filter((file) => {
@@ -359,6 +352,12 @@ export const Security = () => {
                 解密
               </Button>
             )}
+            {file.encryptionMode === 'SERVER' && file.isEncrypted && (
+              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleServerDecrypt(file) }} loading={decryptLoading}>
+                <Unlock className="h-4 w-4 mr-1" />
+                解密
+              </Button>
+            )}
             {((file.encryptionMode === 'CLIENT' && isUnlocked) || file.encryptionMode !== 'CLIENT') && (
               <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); handleDecryptedDownload(file) }}>
                 <Download className="h-4 w-4 mr-1" />
@@ -377,7 +376,6 @@ export const Security = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
         <div className="flex-1 max-w-md">
           <Input
             placeholder="搜索文件..."
@@ -386,23 +384,6 @@ export const Security = () => {
             prefix={<Search className="h-4 w-4" />}
           />
         </div>
-        <div className="flex bg-neutral-100 rounded-button p-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-button text-sm font-medium transition-all ${
-                activeTab === tab.key
-                  ? 'bg-white text-accent-blue shadow-sm'
-                  : 'text-text-secondary'
-              }`}
-            >
-              <tab.icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
@@ -426,7 +407,6 @@ export const Security = () => {
         ))}
       </div>
 
-      {activeTab === 'files' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
   <div className="space-y-4">
@@ -618,58 +598,6 @@ export const Security = () => {
             </Card>
           </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <h3 className="font-semibold text-text-primary">安全设置</h3>
-            </CardHeader>
-            <CardBody className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-text-primary">高敏感文件自动加密</p>
-                  <p className="text-sm text-text-secondary">检测到高敏感内容自动加密存储</p>
-                </div>
-                <button
-                  onClick={() => setSecuritySettings((prev) => ({ ...prev, encryptHighSensitive: !prev.encryptHighSensitive }))}
-                  className={`w-12 h-6 rounded-full transition-colors ${securitySettings.encryptHighSensitive ? 'bg-accent-blue' : 'bg-neutral-200'}`}
-                >
-                  <span className={`block w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform ${securitySettings.encryptHighSensitive ? 'translate-x-6' : 'translate-x-0.5'}`} />
-                </button>
-              </div>
-
-              <Button variant="primary" onClick={handleSaveSettings}>
-                <Settings className="h-4 w-4 mr-2" />
-                保存设置
-              </Button>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <h3 className="font-semibold text-text-primary">安全能力</h3>
-            </CardHeader>
-            <CardBody className="space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-button">
-                <Shield className="h-5 w-5 text-accent-blue" />
-                <span className="text-sm text-text-secondary">敏感检测：本地正则 + AI 内容解析</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-button">
-                <Lock className="h-5 w-5 text-accent-blue" />
-                <span className="text-sm text-text-secondary">文件加密：AES-256-GCM，每个文件独立密钥端到端加密</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-button">
-                <AlertTriangle className="h-5 w-5 text-accent-blue" />
-                <span className="text-sm text-text-secondary">审计日志：检测与加密操作已记录</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-button">
-                <CheckCircle className="h-5 w-5 text-accent-blue" />
-                <span className="text-sm text-text-secondary">下载保护：端到端加密文件在浏览器本地解密</span>
-              </div>
-            </CardBody>
-          </Card>
-        </div>
-      )}
 
       <Modal isOpen={showDecryptModal} onClose={() => setShowDecryptModal(false)} title="输入文件密钥">
         {decryptTarget && (
