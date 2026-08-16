@@ -16,6 +16,9 @@ import { encryptBlobWithKeyBase64, decryptBlobWithFileKey, encodeText, decodeTex
 import { FILE_TYPES, SENSITIVE_LEVELS, AI_STATUS, ARCHIVE_FILE_TYPES, TEXT_EDITABLE_EXTENSIONS } from '@/utils/constants'
 import type { FileItem, QAResponse, VersionItem, SensitiveItem } from '@/api/types'
 
+const isClientEncrypted = (file: FileItem | null | undefined) =>
+  !!file?.isEncrypted && file.encryptionMode !== 'SERVER'
+
 export const FileDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -109,7 +112,7 @@ export const FileDetail = () => {
       error('压缩包不支持直接进行智能问答，请先解压后上传文件再试')
       return
     }
-    if (file.encryptionMode === 'CLIENT') {
+    if (isClientEncrypted(file)) {
       error('端到端加密文件无法进行服务器端智能问答，请先在本地解密')
       return
     }
@@ -148,7 +151,7 @@ export const FileDetail = () => {
     try {
       const response = await filesApi.download(file.id) as unknown as Blob
       let bytes = new Uint8Array(await response.arrayBuffer())
-      if (file.encryptionMode === 'CLIENT') {
+      if (isClientEncrypted(file)) {
         const key = currentKey || unlockedFileKey
         if (!key) throw new Error('请输入该文件的密钥')
         bytes = await decryptBlobWithFileKey(bytes, key)
@@ -176,7 +179,7 @@ export const FileDetail = () => {
 
   const handleDecrypt = async () => {
     if (!file) return
-    if (file.encryptionMode !== 'CLIENT') return
+    if (!isClientEncrypted(file)) return
     setPendingUploadVersion(null)
     openKeyPrompt('decrypt')
   }
@@ -198,7 +201,7 @@ export const FileDetail = () => {
 
   const handleDownload = async () => {
     if (!file) return
-    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+    if (isClientEncrypted(file) && !unlockedFileKey) {
       error('文件仍处于加密状态，请先点击“解密”输入文件密钥')
       return
     }
@@ -207,13 +210,13 @@ export const FileDetail = () => {
 
   const handleEncryptFile = async () => {
     if (!file) return
-    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+    if (isClientEncrypted(file) && !unlockedFileKey) {
       if (!confirm(`确定要重新加密文件 ${file.name} 吗？重新加密需要先输入当前密钥。`)) return
       setPendingUploadVersion(null)
       openKeyPrompt('encrypt')
       return
     }
-    if (!confirm(`确定要${file.encryptionMode === 'CLIENT' ? '重新加密' : '加密'}文件 ${file.name} 吗？`)) return
+    if (!confirm(`确定要${isClientEncrypted(file) ? '重新加密' : '加密'}文件 ${file.name} 吗？`)) return
     await runEncryptFile()
   }
 
@@ -223,7 +226,7 @@ export const FileDetail = () => {
     try {
       const blob = await filesApi.download(file.id) as unknown as Blob
       let plain = new Uint8Array(await blob.arrayBuffer())
-      if (file.encryptionMode === 'CLIENT') {
+      if (isClientEncrypted(file)) {
         const key = currentKey || unlockedFileKey
         if (!key) throw new Error('请先解密该文件，再使用新密钥重新加密')
         plain = await decryptBlobWithFileKey(plain, key)
@@ -231,7 +234,7 @@ export const FileDetail = () => {
       const fileKey = await generateFileKey()
       const encryptedData = await encryptBlobWithFileKey(plain, fileKey)
       const encryptedFile = new File([encryptedData], file.name, { type: file.mimeType })
-      const comment = file.encryptionMode === 'CLIENT' ? '重新加密' : '端到端加密'
+      const comment = isClientEncrypted(file) ? '重新加密' : '端到端加密'
       const updated = await filesApi.uploadVersion(file.id, encryptedFile, comment, undefined, true)
       setFile(updated)
       await fetchVersionHistory(file.id)
@@ -303,7 +306,7 @@ export const FileDetail = () => {
       error('压缩包不支持直接进行安全检测，请先解压后上传文件再试')
       return
     }
-    if (file.encryptionMode === 'CLIENT') {
+    if (isClientEncrypted(file)) {
       error('端到端加密文件无法进行服务器端敏感检测，请先在本地解密后上传普通文件')
       return
     }
@@ -351,7 +354,7 @@ export const FileDetail = () => {
       error('压缩包不支持直接生成摘要，请先解压后上传文件再试')
       return
     }
-    if (file.encryptionMode === 'CLIENT') {
+    if (isClientEncrypted(file)) {
       error('端到端加密文件无法进行服务器端 AI 摘要，请先在本地解密')
       return
     }
@@ -379,7 +382,7 @@ export const FileDetail = () => {
       error('压缩包不支持直接进行 AI 分类，请先解压后上传文件再试')
       return
     }
-    if (file.encryptionMode === 'CLIENT') {
+    if (isClientEncrypted(file)) {
       error('端到端加密文件无法进行服务器端 AI 分类，请先在本地解密')
       return
     }
@@ -467,7 +470,7 @@ export const FileDetail = () => {
       error('请选择要上传的新版本文件')
       return
     }
-    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+    if (isClientEncrypted(file) && !unlockedFileKey) {
       setPendingUploadVersion({ file: uploadVersionFile, comment: uploadVersionComment.trim() })
       openKeyPrompt('upload-version')
       return
@@ -481,7 +484,7 @@ export const FileDetail = () => {
     try {
       let uploadTarget: File = target
       let encrypted = false
-      if (file.encryptionMode === 'CLIENT') {
+      if (isClientEncrypted(file)) {
         const key = currentKey || unlockedFileKey
         if (!key) throw new Error('请输入该文件的密钥')
         const plain = new Uint8Array(await target.arrayBuffer())
@@ -506,7 +509,7 @@ export const FileDetail = () => {
 
   const handleOpenTextEdit = async () => {
     if (!file) return
-    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+    if (isClientEncrypted(file) && !unlockedFileKey) {
       setPendingUploadVersion(null)
       openKeyPrompt('text-edit')
       return
@@ -521,7 +524,7 @@ export const FileDetail = () => {
       const blob = await filesApi.download(file.id) as unknown as Blob
       const bytes = new Uint8Array(await blob.arrayBuffer())
       const key = currentKey || unlockedFileKey
-      const content = file.encryptionMode === 'CLIENT'
+      const content = isClientEncrypted(file)
         ? decodeText(await decryptBlobWithFileKey(bytes, key || ''))
         : await blob.text()
       setTextContent(content)
@@ -539,7 +542,7 @@ export const FileDetail = () => {
       error('文件内容不能为空')
       return
     }
-    if (file.encryptionMode === 'CLIENT' && !unlockedFileKey) {
+    if (isClientEncrypted(file) && !unlockedFileKey) {
       setPendingUploadVersion(null)
       openKeyPrompt('save-text')
       return
@@ -552,7 +555,7 @@ export const FileDetail = () => {
     setTextSaving(true)
     try {
       let updated
-      if (file.encryptionMode === 'CLIENT') {
+      if (isClientEncrypted(file)) {
         const key = currentKey || unlockedFileKey
         if (!key) throw new Error('请输入该文件的密钥')
         const encryptedData = await encryptBlobWithKeyBase64(encodeText(content), key)
@@ -583,7 +586,7 @@ export const FileDetail = () => {
     try {
       const blob = await filesApi.download(file.id) as unknown as Blob
       const bytes = new Uint8Array(await blob.arrayBuffer())
-      if (file.encryptionMode === 'CLIENT') {
+      if (isClientEncrypted(file)) {
         await decryptBlobWithFileKey(bytes, key)
       }
       setUnlockedFileKey(key)
@@ -649,7 +652,7 @@ export const FileDetail = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-            {file.encryptionMode === 'CLIENT' && !unlockedFileKey && (
+            {isClientEncrypted(file) && !unlockedFileKey && (
             <Button variant="outline" onClick={handleDecrypt}>
               <Unlock className="h-4 w-4 mr-2" />
               解密
@@ -664,13 +667,13 @@ export const FileDetail = () => {
           <Button variant="ghost" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />
             下载
-            {file.encryptionMode === 'CLIENT' && unlockedFileKey && (
+            {isClientEncrypted(file) && unlockedFileKey && (
               <span className="ml-2 px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 text-xs">已解密</span>
             )}
           </Button>
           <Button variant="outline" onClick={handleEncryptFile} loading={encryptLoading}>
             <Lock className="h-4 w-4 mr-2" />
-            {file.encryptionMode === 'CLIENT' ? '重新加密' : '加密'}
+            {isClientEncrypted(file) ? '重新加密' : '加密'}
           </Button>
           <Button variant="ghost" onClick={handleEdit}>
             <Edit3 className="h-4 w-4 mr-2" />
@@ -1006,7 +1009,7 @@ export const FileDetail = () => {
                 <span className="text-text-secondary">加密状态</span>
                 <span className={file.isEncrypted ? 'text-green-500' : 'text-text-secondary'}>
                   {file.isEncrypted
-                    ? file.encryptionMode === 'CLIENT' ? '端到端加密（文件密钥）' : '已加密'
+                    ? isClientEncrypted(file) ? '端到端加密（文件密钥）' : '已加密'
                     : '未加密'}
                 </span>
               </div>

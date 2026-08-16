@@ -12,6 +12,10 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RestController
@@ -20,26 +24,52 @@ public class SseController {
 
     private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
 
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "sse-heartbeat");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     @GetMapping(value = "/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter subscribe(@PathVariable String userId) {
         log.info("SSE subscription request from user: {}", userId);
 
-        SseEmitter emitter = new SseEmitter(300000L);
+        SseEmitter emitter = new SseEmitter(0L);
         emitters.put(userId, emitter);
+
+        ScheduledFuture<?> heartbeat = scheduler.scheduleAtFixedRate(() -> {
+            SseEmitter current = emitters.get(userId);
+            if (current == null) {
+                return;
+            }
+            try {
+                current.send(SseEmitter.event()
+                        .name("heartbeat")
+                        .data(Map.of("time", System.currentTimeMillis())));
+            } catch (IOException e) {
+                log.warn("SSE heartbeat failed for user: {}", userId, e);
+                emitters.remove(userId);
+            }
+        }, 25, 25, TimeUnit.SECONDS);
+
+        Runnable stopHeartbeat = () -> {
+            heartbeat.cancel(false);
+            emitters.remove(userId);
+        };
 
         emitter.onCompletion(() -> {
             log.info("SSE connection completed for user: {}", userId);
-            emitters.remove(userId);
+            stopHeartbeat.run();
         });
 
         emitter.onTimeout(() -> {
             log.info("SSE connection timeout for user: {}", userId);
-            emitters.remove(userId);
+            stopHeartbeat.run();
         });
 
         emitter.onError(e -> {
             log.error("SSE connection error for user: {}", userId, e);
-            emitters.remove(userId);
+            stopHeartbeat.run();
         });
 
         try {
@@ -102,6 +132,7 @@ public class SseController {
             }
         });
         emitters.clear();
+        scheduler.shutdownNow();
         log.info("SSE controller cleaned up");
     }
 }

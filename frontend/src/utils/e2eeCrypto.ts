@@ -1,3 +1,6 @@
+import { gcm } from '@noble/ciphers/aes.js'
+import { sha256 } from '@noble/hashes/sha2.js'
+
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
@@ -18,22 +21,16 @@ const bytesToBase64 = (bytes: Uint8Array): string => {
   return btoa(binary)
 }
 
-const importRawKey = async (raw: Uint8Array, extractable: boolean, usages: KeyUsage[]): Promise<CryptoKey> => {
-  return crypto.subtle.importKey('raw', raw as BufferSource, { name: 'AES-GCM', length: 256 }, extractable, usages)
-}
-
 export interface FileKey {
   raw: Uint8Array
   base64: string
-  cryptoKey: CryptoKey
 }
 
 export const generateFileKey = async (): Promise<FileKey> => {
   const raw = crypto.getRandomValues(new Uint8Array(32))
   return {
     raw,
-    base64: bytesToBase64(raw),
-    cryptoKey: await importRawKey(raw, false, ['encrypt'])
+    base64: bytesToBase64(raw)
   }
 }
 
@@ -41,12 +38,8 @@ const FILE_MAGIC_V2 = new Uint8Array([0x4e, 0x4d, 0x4c, 0x45]) // NMLE
 
 export const encryptBlobWithFileKey = async (data: Uint8Array, fileKey: FileKey): Promise<Uint8Array> => {
   const iv = crypto.getRandomValues(new Uint8Array(12))
-  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
-    fileKey.cryptoKey,
-    data as BufferSource
-  ))
-  const fingerprint = new Uint8Array(await crypto.subtle.digest('SHA-256', fileKey.raw as BufferSource))
+  const ciphertext = gcm(fileKey.raw, iv).encrypt(data)
+  const fingerprint = sha256(fileKey.raw)
   const header = new Uint8Array(FILE_MAGIC_V2.length + 1 + fingerprint.length + iv.length)
   let offset = 0
   header.set(FILE_MAGIC_V2, offset); offset += FILE_MAGIC_V2.length
@@ -64,8 +57,7 @@ export const encryptBlobWithKeyBase64 = async (data: Uint8Array, keyBase64: stri
   if (raw.length !== 32) {
     throw new Error('文件密钥格式不正确，请检查是否完整复制')
   }
-  const cryptoKey = await importRawKey(raw, false, ['encrypt'])
-  return encryptBlobWithFileKey(data, { raw, base64: keyBase64.trim(), cryptoKey })
+  return encryptBlobWithFileKey(data, { raw, base64: keyBase64.trim() })
 }
 
 // 兼容旧版账号密钥格式（NMLE v1），旧文件使用保存的账号密钥解密
@@ -85,29 +77,19 @@ const decryptBlobWithLegacyAccountKey = async (blob: Uint8Array, accountKeyBase6
   if (raw.length !== 32) {
     throw new Error('文件密钥格式不正确，请检查是否完整复制')
   }
-  const accountKey = await importRawKey(raw, false, ['decrypt'])
   let fileKeyRaw: Uint8Array
   try {
-    fileKeyRaw = new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: wrapIv as BufferSource },
-      accountKey,
-      wrappedFileKey as BufferSource
-    ))
+    fileKeyRaw = gcm(raw, wrapIv).decrypt(wrappedFileKey)
   } catch {
     throw new Error('旧版加密文件需要使用当时保存的账号密钥，请检查输入')
   }
-  const fileKey = await importRawKey(fileKeyRaw, false, ['decrypt'])
-  let plaintext: ArrayBuffer
+  let plaintext: Uint8Array
   try {
-    plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
-      fileKey,
-      blob.slice(offset + wrappedKeyLength) as BufferSource
-    )
+    plaintext = gcm(fileKeyRaw, iv).decrypt(blob.slice(offset + wrappedKeyLength))
   } catch {
     throw new Error('旧版加密文件需要使用当时保存的账号密钥，请检查输入')
   }
-  return new Uint8Array(plaintext)
+  return plaintext
 }
 
 export const decryptBlobWithFileKey = async (blob: Uint8Array, keyBase64: string): Promise<Uint8Array> => {
@@ -130,7 +112,7 @@ export const decryptBlobWithFileKey = async (blob: Uint8Array, keyBase64: string
   if (raw.length !== 32) {
     throw new Error('文件密钥格式不正确，请检查是否完整复制')
   }
-  const fingerprint = new Uint8Array(await crypto.subtle.digest('SHA-256', raw as BufferSource))
+  const fingerprint = sha256(raw)
   let offset = FILE_MAGIC_V2.length + 1
   const headerFingerprint = blob.slice(offset, offset + 32); offset += 32
   for (let i = 0; i < 32; i++) {
@@ -139,13 +121,7 @@ export const decryptBlobWithFileKey = async (blob: Uint8Array, keyBase64: string
     }
   }
   const iv = blob.slice(offset, offset + 12); offset += 12
-  const fileKey = await importRawKey(raw, false, ['decrypt'])
-  const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
-    fileKey,
-    blob.slice(offset) as BufferSource
-  )
-  return new Uint8Array(plaintext)
+  return gcm(raw, iv).decrypt(blob.slice(offset))
 }
 
 export const decodeText = (bytes: Uint8Array) => decoder.decode(bytes)

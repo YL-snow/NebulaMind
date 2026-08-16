@@ -183,7 +183,7 @@ export const Home = () => {
   const handleDownloadFile = async (file: FileItem) => {
     try {
       let key: string | undefined
-      if (file.encryptionMode === 'CLIENT') {
+      if (file.isEncrypted && file.encryptionMode !== 'SERVER') {
         key = unlockedFileKeys[file.id]
         if (!key) {
           setKeyPrompt({ fileId: file.id, fileName: file.name })
@@ -194,7 +194,7 @@ export const Home = () => {
       }
       const blob: Blob = await filesApi.download(file.id) as unknown as Blob
       let bytes = new Uint8Array(await blob.arrayBuffer())
-      if (file.encryptionMode === 'CLIENT' && key) {
+      if (file.isEncrypted && file.encryptionMode !== 'SERVER' && key) {
         bytes = await decryptBlobWithFileKey(bytes, key)
       }
       const url = window.URL.createObjectURL(new Blob([bytes], { type: file.mimeType || blob.type }))

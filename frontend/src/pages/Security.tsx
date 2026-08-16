@@ -14,6 +14,8 @@ import { generateFileKey, encryptBlobWithFileKey, decryptBlobWithFileKey } from 
 import { formatFileSize, formatDate } from '@/utils/format'
 import type { FileItem, SensitiveItem } from '@/api/types'
 
+const isClientEncrypted = (file: FileItem) => file.isEncrypted && file.encryptionMode !== 'SERVER'
+
 export const Security = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null)
@@ -97,7 +99,7 @@ export const Security = () => {
     try {
       const blob = await filesApi.download(file.id) as unknown as Blob
       let plain = new Uint8Array(await blob.arrayBuffer())
-      if (file.encryptionMode === 'CLIENT') {
+      if (isClientEncrypted(file)) {
         const currentKey = existingKey || decryptedFileKeys[file.id]
         if (!currentKey) throw new Error('请先解密该文件，再使用新密钥重新加密')
         plain = await decryptBlobWithFileKey(plain, currentKey)
@@ -105,7 +107,7 @@ export const Security = () => {
       const fileKey = await generateFileKey()
       const encryptedData = await encryptBlobWithFileKey(plain, fileKey)
       const encryptedFile = new File([encryptedData], file.name, { type: file.mimeType })
-      const comment = file.encryptionMode === 'CLIENT' ? '重新加密' : '端到端加密'
+      const comment = isClientEncrypted(file) ? '重新加密' : '端到端加密'
       const updatedFile = await filesApi.uploadVersion(file.id, encryptedFile, comment, undefined, true)
       setUnlockedFileIds((prev) => {
         const next = new Set(prev)
@@ -131,13 +133,13 @@ export const Security = () => {
   }
 
   const handleEncrypt = async (file: FileItem) => {
-    if (file.encryptionMode === 'CLIENT' && !unlockedFileIds.has(file.id)) {
+    if (isClientEncrypted(file) && !unlockedFileIds.has(file.id)) {
       if (!confirm(`确定要重新加密文件 ${file.name} 吗？重新加密需要先输入当前密钥。`)) return
       setPendingEncryptFile(file)
       handleDecryptOpen(file)
       return
     }
-    if (!confirm(`确定要${file.encryptionMode === 'CLIENT' ? '重新加密' : '加密'}文件 ${file.name} 吗？`)) return
+    if (!confirm(`确定要${isClientEncrypted(file) ? '重新加密' : '加密'}文件 ${file.name} 吗？`)) return
     await runEncrypt(file)
   }
 
@@ -188,7 +190,7 @@ export const Security = () => {
     try {
       const blob = await filesApi.download(file.id) as unknown as Blob
       let bytes = new Uint8Array(await blob.arrayBuffer())
-      if (file.encryptionMode === 'CLIENT') {
+      if (isClientEncrypted(file)) {
         const key = decryptedFileKeys[file.id]
         if (!key) {
           error('文件仍处于加密状态，请先点击“解密”输入文件密钥')
@@ -321,6 +323,7 @@ export const Security = () => {
   const SecurityFileCard = ({ file }: { file: FileItem }) => {
     const Icon = fileIcon(file)
     const isUnlocked = unlockedFileIds.has(file.id)
+    const isClientEncrypted = file.isEncrypted && file.encryptionMode !== 'SERVER'
     return (
       <Card key={file.id} hoverable onClick={() => handleDetect(file)}>
         <CardBody className="flex items-center gap-4">
@@ -333,7 +336,7 @@ export const Security = () => {
               {file.isEncrypted && (
                 <Lock className="h-4 w-4 text-green-500" />
               )}
-              {file.encryptionMode === 'CLIENT' && isUnlocked && (
+              {isClientEncrypted && isUnlocked && (
                 <span className="px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 text-xs whitespace-nowrap">已解密</span>
               )}
             </div>
@@ -346,7 +349,7 @@ export const Security = () => {
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleDetect(file) }}>
               检测
             </Button>
-            {file.encryptionMode === 'CLIENT' && !isUnlocked && (
+            {isClientEncrypted && !isUnlocked && (
               <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleDecryptOpen(file) }}>
                 <Unlock className="h-4 w-4 mr-1" />
                 解密
@@ -358,7 +361,7 @@ export const Security = () => {
                 解密
               </Button>
             )}
-            {((file.encryptionMode === 'CLIENT' && isUnlocked) || file.encryptionMode !== 'CLIENT') && (
+            {(!isClientEncrypted || isUnlocked) && (
               <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); handleDecryptedDownload(file) }}>
                 <Download className="h-4 w-4 mr-1" />
                 下载
@@ -366,7 +369,7 @@ export const Security = () => {
             )}
             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEncrypt(file) }} disabled={encryptLoading}>
               <Lock className="h-4 w-4 mr-1" />
-              {file.encryptionMode === 'CLIENT' ? '重新加密' : file.isEncrypted ? '转为端到端加密' : '加密'}
+              {file.encryptionMode === 'SERVER' && file.isEncrypted ? '转为端到端加密' : isClientEncrypted ? '重新加密' : '加密'}
             </Button>
           </div>
         </CardBody>
