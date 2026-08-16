@@ -265,6 +265,7 @@ public class FileVersionService {
      *         - deletions: 删除行数
      *         - changes: 修改行数
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> diffVersions(UUID fileId, int versionA, int versionB) {
         FileVersion va = getVersion(fileId, versionA);
         FileVersion vb = getVersion(fileId, versionB);
@@ -349,6 +350,7 @@ public class FileVersionService {
      *
      * @return 修改记录列表
      */
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getEditHistory(UUID fileId) {
         List<FileVersion> versions = fileVersionRepository.findByFileIdOrderByVersionNumberDesc(fileId);
 
