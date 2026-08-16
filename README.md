@@ -7,6 +7,7 @@
 ## 目录
 
 - [项目简介](#项目简介)
+- [在线演示](#在线演示)
 - [产品价值](#产品价值)
 - [核心功能](#核心功能)
 - [技术架构](#技术架构)
@@ -27,6 +28,18 @@
 产品核心体验是"上传 → 理解 → 检索 → 生成"：用户上传文档后，系统自动完成文件解析、AI 分类打标、摘要生成、向量索引；用户可以用自然语言搜索文件、基于单文档或多文档问答，并直接生成摘要、报告；PPT 大纲与格式转换后端接口已实现，前端页面待接入。安全侧提供敏感内容两级检测、AES-256-GCM 加密和端到端加密；生态侧支持 MinIO/S3、WebDAV 云盘接入。
 
 项目源自学校 5 人课程小组作业，按 Scrum 节奏在 8 周内完成 V1.0-V2.0；本公开仓库为应聘整理的个人完善版，已重构代码并补齐文档。项目采用双服务架构：Java 21 + Spring Boot 3.2 负责业务与安全，Python FastAPI 负责 AI 推理，前端使用 React 19 + TypeScript + Vite；基础设施包括 PostgreSQL、Redis、RabbitMQ、MinIO 与 Milvus，并通过 Docker Compose 统一编排。
+
+## 在线演示
+
+线上环境已部署至阿里云 ECS，可直接访问体验：
+
+| 入口 | 地址 |
+|------|------|
+| Web 应用 | http://121.41.224.122 |
+| 后端 API | http://121.41.224.122:8080 |
+| MinIO 控制台 | http://121.41.224.122:9001 |
+
+演示环境为 2C4G 低配单机，注册账号后即可体验：上传文件 → AI 分类/摘要/敏感检测 → 语义搜索与文档问答 → 版本对比 → 端到端加密 → 云存储对接。建议按 [演示指南](docs/DEMO_GUIDE.md) 操作，完整演示约 15-30 分钟。
 
 
 ## 产品价值
@@ -84,7 +97,7 @@
 - S3 兼容接口
 - Sentinel 限流熔断
 - SkyWalking 调用链追踪（预留）
-- Docker Compose 开发/生产编排（旧版曾部署至阿里云 ECS；当前公开版本部署待执行）
+- Docker Compose 开发/生产编排（当前公开版本已部署至阿里云 ECS 演示环境）
 
 ---
 
@@ -161,6 +174,23 @@ flowchart TB
     WebDAV --> Backend
 ```
 
+### 部署架构
+
+```mermaid
+flowchart LR
+    User[用户浏览器] -->|HTTP :80| Nginx[Nginx 反向代理]
+    Nginx -->|静态资源 /| Frontend[前端 React 容器 :80]
+    Nginx -->|/api /ws /sse| Backend[后端 Spring Boot 容器 :8080]
+    Backend -->|REST/SSE| AI[AI 服务 FastAPI 容器 :8081]
+    Backend --> PG[(PostgreSQL)]
+    Backend --> Redis[(Redis)]
+    Backend --> MQ[RabbitMQ]
+    Backend --> MinIO[(MinIO)]
+    AI --> Milvus[(Milvus)]
+    AI --> Redis
+    AI --> MinIO
+```
+
 ---
 
 ## 项目管理
@@ -185,7 +215,7 @@ flowchart TB
 | 团队分工 | W2 | 团队开发方案分配 | 5 个角色开发方案、任务分解、交付物定义 |
 | 迭代开发 | W3-W6 | 后端 / AI / 前端代码 | V1.0 基础架构 → V1.1 AI 集成 → V1.2 内容生成与安全 |
 | 测试验收 | W6-W7 | 验收记录、性能优化报告 | 功能测试、性能压测、安全加固 |
-| 部署交付 | W7-W8 | Docker 镜像 + 部署指南 | Docker Compose 编排、ECS 部署方案（当前版本待执行） |
+| 部署交付 | W7-W8 | Docker 镜像 + 部署指南 | Docker Compose 编排、ECS 部署方案（当前版本已部署） |
 
 ### 团队角色分工
 
@@ -358,6 +388,7 @@ NebulaMind/
 | [数据库设计文档](/docs/database/数据库ER图文档.md) | docs/database/ | ER 图、表结构、索引策略 |
 | [DDL 脚本](/docs/database/DDL脚本.sql) | docs/database/ | PostgreSQL 建表语句 |
 | [部署指南](/docs/DEPLOYMENT_GUIDE.md) | docs/ | Docker 部署、ECS 部署、环境变量说明 |
+| [演示指南](/docs/DEMO_GUIDE.md) | docs/DEMO_GUIDE.md | 在线演示地址、演示流程、注意事项与面试讲解建议 |
 | [核心流程与状态图](/docs/flow-diagrams.md) | docs/flow-diagrams.md | AI 摘要时序图、问答流程、文件状态机、用户交互流程 |
 | [方案选型记录](/docs/solution-selection.md) | docs/solution-selection.md | 候选方案、评分表、选型结论 |
 
