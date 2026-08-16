@@ -4,6 +4,7 @@ import com.nebulamind.entity.File;
 import com.nebulamind.entity.FileVersion;
 import com.nebulamind.entity.User;
 import com.nebulamind.util.FileTypeDetector;
+import com.nebulamind.util.TextExtractionUtil;
 import com.nebulamind.exception.ResourceNotFoundException;
 import com.nebulamind.repository.FileRepository;
 import com.nebulamind.repository.FileVersionRepository;
@@ -528,7 +529,11 @@ public class FileVersionService {
 
     private String downloadVersionContent(FileVersion version) throws Exception {
         byte[] bytes = downloadVersionBytes(version);
-        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+        String text = TextExtractionUtil.extractText(bytes, version.getStoragePath());
+        if (text.isBlank() && !TextExtractionUtil.isPlainTextFile(version.getStoragePath()) && bytes.length > 0) {
+            throw new IllegalArgumentException("No extractable text in version " + version.getVersionNumber());
+        }
+        return text;
     }
 
     private byte[] downloadVersionBytes(FileVersion version) throws Exception {
