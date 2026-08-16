@@ -309,7 +309,7 @@ python main.py
 
 | 角色 | 用户名 | 密码 |
 |------|--------|------|
-| 管理员 | admin@nebulamind.com | your-password |
+| 管理员 | admin@nebulamind.com | 部署时自行设置（见 .env） |
 | 普通用户 | 注册后使用 | - |
 
 ---
