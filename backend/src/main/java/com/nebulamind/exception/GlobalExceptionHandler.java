@@ -2,6 +2,8 @@ package com.nebulamind.exception;
 
 import com.alibaba.csp.sentinel.slots.block.BlockException;
 import lombok.extern.slf4j.Slf4j;
+import io.minio.errors.MinioException;
+import java.io.IOException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -65,6 +67,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBlockException(BlockException ex) {
         log.warn("Sentinel block exception: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded, please try again later");
+    }
+
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<Map<String, Object>> handleIoException(IOException ex) {
+        log.warn("Cloud storage connection failed: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.BAD_GATEWAY,
+                "无法连接云存储服务，请检查 Endpoint 地址、端口和网络配置");
+    }
+
+    @ExceptionHandler(MinioException.class)
+    public ResponseEntity<Map<String, Object>> handleMinioException(MinioException ex) {
+        log.warn("Cloud storage request failed: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.BAD_GATEWAY,
+                "云存储服务请求失败: " + ex.getMessage());
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

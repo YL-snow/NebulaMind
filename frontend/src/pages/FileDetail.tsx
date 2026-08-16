@@ -13,6 +13,7 @@ import { securityApi } from '@/api/security'
 import { generateApi } from '@/api/generate'
 import { formatFileSize, formatDate, formatDateTime } from '@/utils/format'
 import { encryptBlobWithKeyBase64, decryptBlobWithFileKey, encodeText, decodeText, generateFileKey, encryptBlobWithFileKey } from '@/utils/e2eeCrypto'
+import { copyText } from '@/utils/clipboard'
 import { FILE_TYPES, SENSITIVE_LEVELS, AI_STATUS, ARCHIVE_FILE_TYPES, TEXT_EDITABLE_EXTENSIONS } from '@/utils/constants'
 import type { FileItem, QAResponse, VersionItem, SensitiveItem } from '@/api/types'
 
@@ -72,7 +73,7 @@ export const FileDetail = () => {
   const [oneTimeKey, setOneTimeKey] = useState<{ fileName: string; key: string } | null>(null)
   const [copiedKey, setCopiedKey] = useState(false)
 
-  const { error, success } = useToast()
+  const { error, success, info } = useToast()
 
   useEffect(() => {
     if (id) {
@@ -220,16 +221,22 @@ export const FileDetail = () => {
     await runEncryptFile()
   }
 
-  const runEncryptFile = async (currentKey?: string) => {
+  const runEncryptFile = async (currentKey?: string, plainOverride?: Uint8Array) => {
     if (!file) return
     setEncryptLoading(true)
+    info('正在本地下载并加密文件，请稍候...')
     try {
-      const blob = await filesApi.download(file.id) as unknown as Blob
-      let plain = new Uint8Array(await blob.arrayBuffer())
-      if (isClientEncrypted(file)) {
-        const key = currentKey || unlockedFileKey
-        if (!key) throw new Error('请先解密该文件，再使用新密钥重新加密')
-        plain = await decryptBlobWithFileKey(plain, key)
+      let plain: Uint8Array
+      if (plainOverride) {
+        plain = plainOverride
+      } else {
+        const blob = await filesApi.download(file.id) as unknown as Blob
+        plain = new Uint8Array(await blob.arrayBuffer())
+        if (isClientEncrypted(file)) {
+          const key = currentKey || unlockedFileKey
+          if (!key) throw new Error('请先解密该文件，再使用新密钥重新加密')
+          plain = await decryptBlobWithFileKey(plain, key)
+        }
       }
       const fileKey = await generateFileKey()
       const encryptedData = await encryptBlobWithFileKey(plain, fileKey)
@@ -252,7 +259,11 @@ export const FileDetail = () => {
 
   const handleCopyOneTimeKey = async () => {
     if (!oneTimeKey) return
-    await navigator.clipboard.writeText(oneTimeKey.key)
+    const copied = await copyText(oneTimeKey.key)
+    if (!copied) {
+      error('复制失败，请手动选择密钥后复制')
+      return
+    }
     setCopiedKey(true)
     setTimeout(() => setCopiedKey(false), 2000)
   }
@@ -583,11 +594,13 @@ export const FileDetail = () => {
     }
     if (!file) return
     setKeyPromptLoading(true)
+    info('正在本地解密文件，请稍候...')
     try {
       const blob = await filesApi.download(file.id) as unknown as Blob
       const bytes = new Uint8Array(await blob.arrayBuffer())
+      let plain: Uint8Array | undefined
       if (isClientEncrypted(file)) {
-        await decryptBlobWithFileKey(bytes, key)
+        plain = await decryptBlobWithFileKey(bytes, key)
       }
       setUnlockedFileKey(key)
       setKeyPromptInput('')
@@ -606,7 +619,7 @@ export const FileDetail = () => {
       } else if (pendingKeyAction === 'save-text') {
         await runSaveTextVersion(textContent, textComment.trim(), key)
       } else if (pendingKeyAction === 'encrypt') {
-        await runEncryptFile(key)
+        await runEncryptFile(key, plain)
       }
     } catch (err) {
       setKeyPromptError((err as Error).message || '文件密钥不正确')

@@ -9,7 +9,7 @@ export interface UploadFile {
   size: number
   type: string
   progress: number
-  status: 'pending' | 'uploading' | 'completed' | 'error'
+  status: 'pending' | 'encrypting' | 'uploading' | 'completed' | 'error'
   error?: string
 }
 
@@ -133,6 +133,7 @@ export const Uploader = ({ files, onFileSelect, onRemove, onClearCompleted }: Up
                       }`}
                     >
                       {file.status === 'pending' && '等待上传'}
+                      {file.status === 'encrypting' && '本地加密中...'}
                       {file.status === 'uploading' && '上传中...'}
                       {file.status === 'completed' && '上传完成'}
                       {file.status === 'error' && (file.error || '上传失败')}

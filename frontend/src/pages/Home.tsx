@@ -12,6 +12,7 @@ import { useFileStore } from '@/stores/fileStore'
 import { filesApi } from '@/api/files'
 import { useToast } from '@/components/common/Toast'
 import { formatFileSize } from '@/utils/format'
+import { copyText } from '@/utils/clipboard'
 import { generateFileKey, encryptBlobWithFileKey, decryptBlobWithFileKey } from '@/utils/e2eeCrypto'
 import type { DuplicateGroup, FileItem } from '@/api/types'
 
@@ -71,7 +72,7 @@ export const Home = () => {
       size: file.size,
       type: file.type.split('/')[1] || 'unknown',
       progress: 0,
-      status: 'pending',
+      status: e2eeUpload ? 'encrypting' : 'pending',
     }))
     setUploadingFiles(newFiles)
 
@@ -82,7 +83,7 @@ export const Home = () => {
       const uploadId = newFiles[index].id
       
       setUploadingFiles((prev) =>
-        prev.map((f, i) => (i === index ? { ...f, status: 'uploading' } : f))
+        prev.map((f, i) => (i === index ? { ...f, status: e2eeUpload ? 'encrypting' : 'uploading' } : f))
       )
 
       const formData = new FormData()
@@ -94,6 +95,9 @@ export const Home = () => {
         const encryptedData = await encryptBlobWithFileKey(plain, fileKey)
         formData.set('file', new File([encryptedData], file.name, { type: file.type }))
         pendingKey = fileKey.base64
+        setUploadingFiles((prev) =>
+          prev.map((f) => (f.id === uploadId ? { ...f, status: 'uploading', progress: 0 } : f))
+        )
       }
 
       try {
@@ -156,7 +160,11 @@ export const Home = () => {
   const handleCopyOneTimeKey = async (index: number) => {
     const item = oneTimeKeys[index]
     if (!item) return
-    await navigator.clipboard.writeText(item.key)
+    const copied = await copyText(item.key)
+    if (!copied) {
+      error('复制失败，请手动选择密钥后复制')
+      return
+    }
     setCopiedKeyIndex(index)
     setTimeout(() => setCopiedKeyIndex(null), 2000)
   }

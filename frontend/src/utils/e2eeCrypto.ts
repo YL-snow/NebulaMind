@@ -4,6 +4,18 @@ import { sha256 } from '@noble/hashes/sha2.js'
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
+const subtleCrypto = typeof crypto !== 'undefined' && crypto.subtle ? crypto.subtle : undefined
+
+const encryptWithNativeGcm = async (rawKey: Uint8Array, iv: Uint8Array, data: Uint8Array): Promise<Uint8Array> => {
+  const key = await subtleCrypto!.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt'])
+  return new Uint8Array(await subtleCrypto!.encrypt({ name: 'AES-GCM', iv }, key, data))
+}
+
+const decryptWithNativeGcm = async (rawKey: Uint8Array, iv: Uint8Array, data: Uint8Array): Promise<Uint8Array> => {
+  const key = await subtleCrypto!.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt'])
+  return new Uint8Array(await subtleCrypto!.decrypt({ name: 'AES-GCM', iv }, key, data))
+}
+
 const base64ToBytes = (value: string): Uint8Array => {
   const binary = atob(value)
   const bytes = new Uint8Array(binary.length)
@@ -38,7 +50,9 @@ const FILE_MAGIC_V2 = new Uint8Array([0x4e, 0x4d, 0x4c, 0x45]) // NMLE
 
 export const encryptBlobWithFileKey = async (data: Uint8Array, fileKey: FileKey): Promise<Uint8Array> => {
   const iv = crypto.getRandomValues(new Uint8Array(12))
-  const ciphertext = gcm(fileKey.raw, iv).encrypt(data)
+  const ciphertext = subtleCrypto
+    ? await encryptWithNativeGcm(fileKey.raw, iv, data)
+    : gcm(fileKey.raw, iv).encrypt(data)
   const fingerprint = sha256(fileKey.raw)
   const header = new Uint8Array(FILE_MAGIC_V2.length + 1 + fingerprint.length + iv.length)
   let offset = 0
@@ -79,13 +93,17 @@ const decryptBlobWithLegacyAccountKey = async (blob: Uint8Array, accountKeyBase6
   }
   let fileKeyRaw: Uint8Array
   try {
-    fileKeyRaw = gcm(raw, wrapIv).decrypt(wrappedFileKey)
+    fileKeyRaw = subtleCrypto
+      ? await decryptWithNativeGcm(raw, wrapIv, wrappedFileKey)
+      : gcm(raw, wrapIv).decrypt(wrappedFileKey)
   } catch {
     throw new Error('旧版加密文件需要使用当时保存的账号密钥，请检查输入')
   }
   let plaintext: Uint8Array
   try {
-    plaintext = gcm(fileKeyRaw, iv).decrypt(blob.slice(offset + wrappedKeyLength))
+    plaintext = subtleCrypto
+      ? await decryptWithNativeGcm(fileKeyRaw, iv, blob.slice(offset + wrappedKeyLength))
+      : gcm(fileKeyRaw, iv).decrypt(blob.slice(offset + wrappedKeyLength))
   } catch {
     throw new Error('旧版加密文件需要使用当时保存的账号密钥，请检查输入')
   }
@@ -121,7 +139,9 @@ export const decryptBlobWithFileKey = async (blob: Uint8Array, keyBase64: string
     }
   }
   const iv = blob.slice(offset, offset + 12); offset += 12
-  return gcm(raw, iv).decrypt(blob.slice(offset))
+  return subtleCrypto
+    ? await decryptWithNativeGcm(raw, iv, blob.slice(offset))
+    : gcm(raw, iv).decrypt(blob.slice(offset))
 }
 
 export const decodeText = (bytes: Uint8Array) => decoder.decode(bytes)

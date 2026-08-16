@@ -11,6 +11,7 @@ import { filesApi } from '@/api/files'
 import { useFileStore } from '@/stores/fileStore'
 import { SENSITIVE_LEVELS } from '@/utils/constants'
 import { generateFileKey, encryptBlobWithFileKey, decryptBlobWithFileKey } from '@/utils/e2eeCrypto'
+import { copyText } from '@/utils/clipboard'
 import { formatFileSize, formatDate } from '@/utils/format'
 import type { FileItem, SensitiveItem } from '@/api/types'
 
@@ -38,7 +39,7 @@ export const Security = () => {
   const [copiedKey, setCopiedKey] = useState(false)
 
   const { files, setFiles } = useFileStore()
-  const { error, success } = useToast()
+  const { error, success, info } = useToast()
 
   // 加载文件列表（始终重新获取以确保数据最新）
   useEffect(() => {
@@ -94,15 +95,21 @@ export const Security = () => {
     }
   }
 
-  const runEncrypt = async (file: FileItem, existingKey?: string) => {
+  const runEncrypt = async (file: FileItem, existingKey?: string, plainOverride?: Uint8Array) => {
     setEncryptLoading(true)
+    info('正在本地下载并加密文件，请稍候...')
     try {
-      const blob = await filesApi.download(file.id) as unknown as Blob
-      let plain = new Uint8Array(await blob.arrayBuffer())
-      if (isClientEncrypted(file)) {
-        const currentKey = existingKey || decryptedFileKeys[file.id]
-        if (!currentKey) throw new Error('请先解密该文件，再使用新密钥重新加密')
-        plain = await decryptBlobWithFileKey(plain, currentKey)
+      let plain: Uint8Array
+      if (plainOverride) {
+        plain = plainOverride
+      } else {
+        const blob = await filesApi.download(file.id) as unknown as Blob
+        plain = new Uint8Array(await blob.arrayBuffer())
+        if (isClientEncrypted(file)) {
+          const currentKey = existingKey || decryptedFileKeys[file.id]
+          if (!currentKey) throw new Error('请先解密该文件，再使用新密钥重新加密')
+          plain = await decryptBlobWithFileKey(plain, currentKey)
+        }
       }
       const fileKey = await generateFileKey()
       const encryptedData = await encryptBlobWithFileKey(plain, fileKey)
@@ -158,10 +165,11 @@ export const Security = () => {
       return
     }
     setDecryptLoading(true)
+    info('正在本地解密文件，请稍候...')
     try {
       const blob = await filesApi.download(decryptTarget.id) as unknown as Blob
       const bytes = new Uint8Array(await blob.arrayBuffer())
-      await decryptBlobWithFileKey(bytes, key)
+      const plain = await decryptBlobWithFileKey(bytes, key)
       setUnlockedFileIds((prev) => {
         const next = new Set(prev)
         next.add(decryptTarget.id)
@@ -175,7 +183,7 @@ export const Security = () => {
       if (pendingEncryptFile && pendingEncryptFile.id === targetId) {
         const target = pendingEncryptFile
         setPendingEncryptFile(null)
-        await runEncrypt(target, key)
+        await runEncrypt(target, key, plain)
       } else {
         success('文件解密成功，可点击“下载”保存明文文件')
       }
@@ -230,7 +238,11 @@ export const Security = () => {
 
   const handleCopyOneTimeKey = async () => {
     if (!oneTimeKey) return
-    await navigator.clipboard.writeText(oneTimeKey.key)
+    const copied = await copyText(oneTimeKey.key)
+    if (!copied) {
+      error('复制失败，请手动选择密钥后复制')
+      return
+    }
     setCopiedKey(true)
     setTimeout(() => setCopiedKey(false), 2000)
   }

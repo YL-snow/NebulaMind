@@ -7,6 +7,8 @@ import com.nebulamind.entity.File;
 import com.nebulamind.repository.FileRepository;
 import com.nebulamind.service.FileService;
 import io.minio.GetObjectArgs;
+import io.minio.BucketExistsArgs;
+import io.minio.MakeBucketArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -206,6 +208,7 @@ public class CloudStorageDriveService {
         String bucket = requireBucket(config);
         MinioClient client = buildS3Client(config);
         String prefix = normalizeS3FolderPrefix(path);
+        ensureS3Bucket(client, config);
 
         List<CloudStorageItem> items = new ArrayList<>();
         Iterable<Result<Item>> results = client.listObjects(ListObjectsArgs.builder()
@@ -244,6 +247,7 @@ public class CloudStorageDriveService {
         String bucket = requireBucket(config);
         MinioClient client = buildS3Client(config);
         String objectName = stripLeadingSlash(path);
+        ensureS3Bucket(client, config);
         try (InputStream in = client.getObject(GetObjectArgs.builder()
                 .bucket(bucket)
                 .object(objectName)
@@ -257,6 +261,7 @@ public class CloudStorageDriveService {
         String bucket = requireBucket(config);
         MinioClient client = buildS3Client(config);
         String prefix = normalizeS3FolderPrefix(folderPath);
+        ensureS3Bucket(client, config);
         String objectName = prefix + fileName;
         client.putObject(PutObjectArgs.builder()
                 .bucket(bucket)
@@ -272,6 +277,7 @@ public class CloudStorageDriveService {
         String bucket = requireBucket(config);
         MinioClient client = buildS3Client(config);
         String objectName = stripLeadingSlash(path);
+        ensureS3Bucket(client, config);
         client.removeObject(RemoveObjectArgs.builder()
                 .bucket(bucket)
                 .object(objectName)
@@ -290,6 +296,15 @@ public class CloudStorageDriveService {
             return new TestResult(true, "S3 连接成功，已列出存储桶");
         } catch (Exception e) {
             return new TestResult(false, "S3 连接失败: " + e.getMessage());
+        }
+    }
+
+    private void ensureS3Bucket(MinioClient client, CloudStorageConfig config) throws Exception {
+        String bucket = requireBucket(config);
+        boolean exists = client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+        if (!exists) {
+            client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+            log.info("Created S3 bucket automatically: {}", bucket);
         }
     }
 
